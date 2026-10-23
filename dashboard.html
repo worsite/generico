@@ -384,7 +384,12 @@ function authSignup() {
         email:f.get('email').trim(), password:f.get('password'),
         options:{data:{role, full_name:f.get('full_name').trim(), phone:f.get('phone').trim(), group_name:f.get('group_name').trim(), group_code:f.get('group_code').trim()}}
       });
-      if (error) return err(error.message.includes('already') ? 'Ese correo ya está registrado.' : error.message);
+      if (error) {
+        const m = (error.message || '').toLowerCase();
+        return err(m.includes('already') ? 'Ese correo ya está registrado. Usa "Ingresar".'
+          : m.includes('rate limit') ? 'Supabase llegó a su límite de correos de confirmación. Desactiva "Confirm email" en Authentication > Sign In / Providers > Email (así no se envían correos) o espera una hora y vuelve a intentar.'
+          : error.message);
+      }
       if (!data.session) err('Cuenta creada, pero Supabase pide confirmar el correo. Desactiva "Confirm email" en Authentication > Providers > Email, o confirma desde tu bandeja.');
     } catch (ex) { err(ex.message); }
     finally { btn.disabled = false; }
