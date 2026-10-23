@@ -204,6 +204,7 @@ const money = n => cop.format(Number(n) || 0);
 const sum = (a, f) => a.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 const fDate = d => new Date(d).toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
 const fTime = d => new Date(d).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+const fDay = d => new Date(String(d).slice(0, 10) + 'T00:00:00').toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
 const fDT = d => `${fDate(d)} · ${fTime(d)}`;
 const toInput = d => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
 const TYPES = {mantenimiento:'Mantenimiento', demo:'Demo', servicio_adicional:'Servicio adicional'};
@@ -541,6 +542,14 @@ const giftStats = sellerId => {
   const del = sum(S.deliveries.filter(x => x.seller_id === sellerId), x => x.quantity);
   return {accepted:acc, delivered:del, available:acc - del, pending:sum(a.filter(x => x.status === 'pendiente'), x => x.quantity)};
 };
+const gkey = n => String(n || 'Obsequio').trim().toLowerCase();
+function giftBreakdown(sellerId) {
+  const m = new Map();
+  const get = n => { const k = gkey(n); if (!m.has(k)) m.set(k, {name:String(n || 'Obsequio').trim(), accepted:0, pending:0, delivered:0}); return m.get(k); };
+  S.assigns.filter(a => a.seller_id === sellerId).forEach(a => { const g = get(a.gift_name); if (a.status === 'aceptado') g.accepted += a.quantity; else if (a.status === 'pendiente') g.pending += a.quantity; });
+  S.deliveries.filter(d => d.seller_id === sellerId).forEach(d => { get(d.gift_name).delivered += d.quantity; });
+  return [...m.values()].map(g => ({...g, available:g.accepted - g.delivered})).sort((a, b) => a.name.localeCompare(b.name));
+}
 VIEWS.resumen = el => {
   const from = periodStart(S.period);
   const ap = S.appts.filter(a => new Date(a.event_date) >= from && new Date(a.event_date) < periodEnd(S.period));
@@ -717,7 +726,7 @@ ACT.openAppt = d => apptDetail(d.id);
 function apptDetail(id) {
   const a = apptOf(id); if (!a) return;
   $$('.ov').forEach(o => o.close?.());
-  const sale = saleOf(a.id), refs = S.refs.filter(r => r.appointment_id === a.id);
+  const sale = saleOf(a.id), refs = S.refs.filter(r => r.appointment_id === a.id), dels = S.deliveries.filter(x => x.appointment_id === a.id);
   const canEdit = isMgr() || a.seller_id === S.me.id;
   const m = modal('Detalle de la cita', `
     <dl class="kv">
@@ -737,9 +746,11 @@ function apptDetail(id) {
       ${sale.notes ? `<div class="small muted" style="margin-top:4px">${esc(sale.notes)}</div>` : ''}
       <div class="actions" style="margin-top:8px"><button class="btn sm" data-act="editSale" data-id="${sale.id}">${ic('edit')} Editar venta</button></div></div>` : ''}
     ${refs.length ? `<div style="margin-bottom:12px"><b>Referidos (${refs.length})</b>${refs.map(r => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${esc(r.name)}</b> <span class="muted small">${esc(r.phone || '')}</span><div class="small muted">${esc(r.address || '')} ${r.notes ? '· ' + esc(r.notes) : ''}</div></div>`).join('')}</div>` : ''}
+    ${dels.length ? `<div style="margin-bottom:12px"><b>Obsequios entregados (${sum(dels, x => x.quantity)})</b>${dels.map(x => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${x.quantity} × ${esc(x.gift_name)}</b> <span class="muted small">· ${fDay(x.delivered_at || x.created_at)}</span><div class="small muted">Para ${esc(x.recipient_name)} · ${esc(x.reason)}</div></div>`).join('')}</div>` : ''}
     ${canEdit ? `<div class="mf" style="justify-content:flex-start">
       ${sale ? '' : `<button class="btn green" data-act="markSale" data-id="${a.id}">${ic('dollar')} Marcar venta</button>`}
       <button class="btn" data-act="addRef" data-id="${a.id}">${ic('plus')} Referidos</button>
+      ${a.seller_id === S.me.id ? `<button class="btn" data-act="newDelivery" data-appt="${a.id}">${ic('gift')} Obsequio entregado</button>` : ''}
       ${a.status === 'pendiente' ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="sin_venta">Sin venta</button>` : ''}
       ${a.status !== 'pendiente' && !sale ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="pendiente">Reabrir</button>` : ''}
       ${a.status !== 'cancelada' && !sale ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="cancelada">Cancelar cita</button>` : ''}
@@ -859,63 +870,91 @@ ACT.delSale = async d => {
 /* =====================================================================
    Obsequios
    ===================================================================== */
+const delivTable = (list, mgr) => list.length ? `<div class="tw"><table><thead><tr><th>Fecha de entrega</th>${mgr ? '<th>Vendedor</th>' : ''}<th>Obsequio</th><th class="num">Cant.</th><th>Entregado a</th><th>Cita</th><th>Motivo</th></tr></thead><tbody>
+  ${list.map(d => `<tr><td>${fDay(d.delivered_at || d.created_at)}</td>${mgr ? `<td>${esc(person(d.seller_id))}</td>` : ''}<td><b>${esc(d.gift_name)}</b></td><td class="num">${d.quantity}</td>
+  <td><b>${esc(d.recipient_name)}</b><div class="small muted">${esc(d.recipient_contact || '')}</div></td><td>${d.appointment_id ? `<button class="btn sm" data-act="openAppt" data-id="${d.appointment_id}">Ver cita</button>` : '—'}</td><td>${esc(d.reason)}</td></tr>`).join('')}</tbody></table></div>`
+  : '<div class="card empty">Aún no hay entregas registradas.</div>';
+const byDelivery = l => [...l].sort((x, y) => String(y.delivered_at || y.created_at).localeCompare(String(x.delivered_at || x.created_at)));
+
 VIEWS.obsequios = el => {
   if (isMgr()) return giftsManager(el);
-  const g = giftStats(S.me.id);
+  const g = giftStats(S.me.id), inv = giftBreakdown(S.me.id);
   const pend = S.assigns.filter(a => a.seller_id === S.me.id && a.status === 'pendiente');
-  const dels = S.deliveries.filter(d => d.seller_id === S.me.id);
+  const dels = byDelivery(S.deliveries.filter(d => d.seller_id === S.me.id));
   el.innerHTML = `
     ${pend.map(a => `<div class="card" style="margin-bottom:12px;background:var(--warn-soft);border-color:#FCD34D"><div class="actions" style="align-items:center">
-      <div style="flex:1"><b>Te enviarán ${a.quantity} obsequio(s)</b><div class="small muted">Asignados el ${fDate(a.created_at)}. Acepta para sumarlos a tu inventario.</div></div>
+      <div style="flex:1"><b>Te enviarán ${a.quantity} × ${esc(a.gift_name)}</b><div class="small muted">Asignados el ${fDate(a.created_at)}. Acepta para sumarlos a tu inventario.</div></div>
       <button class="btn green" data-act="giftAnswer" data-id="${a.id}" data-s="aceptado">${ic('check')} Aceptar</button>
       <button class="btn danger" data-act="giftAnswer" data-id="${a.id}" data-s="rechazado">Rechazar</button></div></div>`).join('')}
     <div class="grid kpis">
       <div class="card kpi"><div class="l">${ic('gift')}Aceptados</div><div class="v">${g.accepted}</div></div>
       <div class="card kpi"><div class="l">${ic('send')}Entregados</div><div class="v">${g.delivered}</div></div>
       <div class="card kpi g"><div class="l">${ic('check')}Disponibles</div><div class="v">${g.available}</div></div></div>
-    <div class="pagehead"><div class="grow"><h2>Entregas a clientes</h2></div><button class="btn primary" data-act="newDelivery" ${g.available > 0 ? '' : 'disabled'}>${ic('plus')} Registrar entrega</button></div>
-    ${dels.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Entregado a</th><th>Contacto</th><th class="num">Cant.</th><th>Motivo</th></tr></thead><tbody>
-    ${dels.map(d => `<tr><td>${fDate(d.created_at)}</td><td><b>${esc(d.recipient_name)}</b></td><td>${esc(d.recipient_contact || '—')}</td><td class="num">${d.quantity}</td><td>${esc(d.reason)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aún no has registrado entregas.</div>'}`;
+    ${inv.length ? `<h2 style="margin-bottom:10px">Mi inventario</h2><div class="tw" style="margin-bottom:24px"><table><thead><tr><th>Obsequio</th><th class="num">Aceptados</th><th class="num">Entregados</th><th class="num">Disponibles</th></tr></thead><tbody>
+      ${inv.map(i => `<tr><td><b>${esc(i.name)}</b></td><td class="num">${i.accepted}</td><td class="num">${i.delivered}</td><td class="num"><b>${i.available}</b></td></tr>`).join('')}</tbody></table></div>` : ''}
+    <div class="pagehead"><div class="grow"><h2>Entregas a clientes</h2><div class="small muted">También puedes registrarlas desde la cita del cliente.</div></div><button class="btn primary" data-act="newDelivery" ${g.available > 0 ? '' : 'disabled'}>${ic('plus')} Registrar entrega</button></div>
+    ${delivTable(dels, false)}`;
 };
 ACT.giftAnswer = d => run(async () => {
   await q(sb.from('gift_assignments').update({status:d.s}).eq('id', d.id));
   toast(d.s === 'aceptado' ? 'Obsequios aceptados' : 'Obsequios rechazados'); await loadAll(); render();
 });
-ACT.newDelivery = () => {
-  const g = giftStats(S.me.id);
-  const m = modal('Registrar entrega de obsequio', `<p class="muted small" style="margin-top:0">Disponibles: <b>${g.available}</b></p><form id="fD">
-    <div class="row2"><label class="f"><span>Entregado a *</span><input name="recipient_name" required></label>
-    <label class="f"><span>Teléfono o contacto</span><input name="recipient_contact"></label></div>
-    <label class="f"><span>Cantidad *</span><input name="quantity" type="number" min="1" max="${g.available}" value="1" required></label>
+ACT.newDelivery = d => deliveryForm(d.appt ? apptOf(d.appt) : null);
+function deliveryForm(a) {
+  const stock = giftBreakdown(S.me.id).filter(g => g.available > 0);
+  if (!stock.length) return toast('No tienes obsequios disponibles. Acepta los que te envíen o pídele más al administrador.', true);
+  const today = toInput(new Date()).slice(0, 10);
+  const mine = S.appts.filter(x => x.seller_id === S.me.id).slice(0, 60);
+  $$('.ov').forEach(o => o.close?.());
+  const m = modal('Obsequio entregado', `<form id="fD">
+    ${a ? `<p class="muted small" style="margin-top:0">Cita de: <b>${esc(a.client_name)}</b></p>` : ''}
+    <div class="row2"><label class="f"><span>Obsequio *</span><select name="gift_name">${stock.map(g => `<option value="${esc(g.name)}" data-max="${g.available}">${esc(g.name)} (disp. ${g.available})</option>`).join('')}</select></label>
+    <label class="f"><span>Cantidad *</span><input name="quantity" type="number" min="1" max="${stock[0].available}" value="1" required></label></div>
+    <div class="row2"><label class="f"><span>Fecha de entrega *</span><input name="delivered_at" type="date" required value="${today}"></label>
+    ${a ? '' : `<label class="f"><span>Cita relacionada</span><select name="appointment_id"><option value="">Sin cita</option>${mine.map(x => `<option value="${x.id}">${esc(x.client_name)} · ${fDate(x.event_date)}</option>`).join('')}</select></label>`}</div>
+    <div class="row2"><label class="f"><span>Entregado a *</span><input name="recipient_name" required value="${esc(a?.client_name)}"></label>
+    <label class="f"><span>Teléfono o contacto</span><input name="recipient_contact" value="${esc(a?.phone)}"></label></div>
     <label class="f"><span>¿Por qué se lo entregaste? *</span><textarea name="reason" required></textarea></label>
-    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">Registrar</button></div></form>`);
+    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">Registrar entrega</button></div></form>`);
+  const sel = $('[name=gift_name]', m), qty = $('[name=quantity]', m);
+  sel.onchange = () => { qty.max = sel.selectedOptions[0].dataset.max; if (Number(qty.value) > Number(qty.max)) qty.value = qty.max; };
   $('#fD', m).onsubmit = e => {
     e.preventDefault(); const f = new FormData(e.target);
     run(async () => {
-      await q(sb.from('gift_deliveries').insert({group_id:S.me.group_id, seller_id:S.me.id, quantity:Number(f.get('quantity')), recipient_name:f.get('recipient_name').trim(), recipient_contact:f.get('recipient_contact').trim() || null, reason:f.get('reason').trim()}));
+      await q(sb.from('gift_deliveries').insert({group_id:S.me.group_id, seller_id:S.me.id, appointment_id:a?.id || f.get('appointment_id') || null,
+        gift_name:f.get('gift_name'), quantity:Number(f.get('quantity')), delivered_at:f.get('delivered_at'),
+        recipient_name:f.get('recipient_name').trim(), recipient_contact:f.get('recipient_contact').trim() || null, reason:f.get('reason').trim()}));
       m.close(); toast('Entrega registrada'); await loadAll(); render();
+      if (a) apptDetail(a.id);
     }, $('button[type=submit]', m));
   };
-};
+}
 function giftsManager(el) {
-  const rows = S.team.filter(p => p.status === 'activo');
-  el.innerHTML = `<div class="pagehead"><div class="grow"><div class="small muted">Inventario de obsequios por vendedor</div></div>
+  const rows = [];
+  S.team.filter(p => p.status === 'activo').forEach(p => giftBreakdown(p.id).forEach(g => rows.push({p, g})));
+  const sent = S.assigns.slice(0, 40);
+  el.innerHTML = `<div class="pagehead"><div class="grow"><div class="small muted">Inventario de obsequios por vendedor y por tipo de obsequio</div></div>
     ${isAdmin() ? `<button class="btn primary" data-act="newAssign">${ic('gift')} Enviar obsequios</button>` : ''}</div>
-    <div class="tw"><table><thead><tr><th>Vendedor</th><th class="num">Aceptados</th><th class="num">Pendientes</th><th class="num">Entregados</th><th class="num">Disponibles</th></tr></thead><tbody>
-    ${rows.map(p => { const g = giftStats(p.id); return `<tr><td><b>${esc(p.full_name)}</b><div class="small muted">${ROLES[p.role]}</div></td><td class="num">${g.accepted}</td><td class="num">${g.pending}</td><td class="num">${g.delivered}</td><td class="num"><b>${g.available}</b></td></tr>`; }).join('')}</tbody></table></div>
+    ${rows.length ? `<div class="tw"><table><thead><tr><th>Vendedor</th><th>Obsequio</th><th class="num">Aceptados</th><th class="num">Pendientes</th><th class="num">Entregados</th><th class="num">Disponibles</th></tr></thead><tbody>
+    ${rows.map(({p, g}) => `<tr><td><b>${esc(p.full_name)}</b><div class="small muted">${ROLES[p.role]}</div></td><td><b>${esc(g.name)}</b></td><td class="num">${g.accepted}</td><td class="num">${g.pending}</td><td class="num">${g.delivered}</td><td class="num"><b>${g.available}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Todavía no has enviado obsequios.</div>'}
+    <div class="pagehead" style="margin-top:24px"><div class="grow"><h2>Envíos a vendedores</h2></div></div>
+    ${sent.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Vendedor</th><th>Obsequio</th><th class="num">Cant.</th><th>Estado</th></tr></thead><tbody>
+    ${sent.map(a => `<tr><td>${fDate(a.created_at)}</td><td>${esc(person(a.seller_id))}</td><td><b>${esc(a.gift_name)}</b></td><td class="num">${a.quantity}</td><td><span class="pill ${a.status === 'aceptado' ? 'green' : a.status === 'rechazado' ? 'red' : 'warn'}">${a.status[0].toUpperCase() + a.status.slice(1)}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Sin envíos todavía.</div>'}
     <div class="pagehead" style="margin-top:24px"><div class="grow"><h2>Entregas a clientes</h2></div></div>
-    ${S.deliveries.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Vendedor</th><th>Entregado a</th><th>Contacto</th><th class="num">Cant.</th><th>Motivo</th></tr></thead><tbody>
-    ${S.deliveries.map(d => `<tr><td>${fDate(d.created_at)}</td><td>${esc(person(d.seller_id))}</td><td><b>${esc(d.recipient_name)}</b></td><td>${esc(d.recipient_contact || '—')}</td><td class="num">${d.quantity}</td><td>${esc(d.reason)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aún no hay entregas registradas.</div>'}`;
+    ${delivTable(byDelivery(S.deliveries), true)}`;
 }
 ACT.newAssign = () => {
-  const m = modal('Enviar obsequios', `<form id="fG"><label class="f"><span>Vendedor *</span><select name="seller_id" required>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></label>
-    <label class="f"><span>Cantidad *</span><input name="quantity" type="number" min="1" value="10" required></label>
+  const names = [...new Set(S.assigns.map(a => a.gift_name))];
+  const m = modal('Enviar obsequios', `<form id="fG"><label class="f"><span>Nombre del obsequio *</span><input name="gift_name" required maxlength="80" list="giftNames" placeholder="Ej: Llavero, Gorra, Set de limpieza" autocomplete="off"></label>
+    <datalist id="giftNames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+    <div class="row2"><label class="f"><span>Vendedor *</span><select name="seller_id" required>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></label>
+    <label class="f"><span>Cantidad *</span><input name="quantity" type="number" min="1" value="10" required></label></div>
     <p class="hint">El vendedor recibirá una notificación y debe aceptarlos.</p>
     <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">Enviar</button></div></form>`);
   $('#fG', m).onsubmit = e => {
     e.preventDefault(); const f = new FormData(e.target);
     run(async () => {
-      await q(sb.from('gift_assignments').insert({group_id:S.me.group_id, seller_id:f.get('seller_id'), quantity:Number(f.get('quantity')), created_by:S.me.id}));
+      await q(sb.from('gift_assignments').insert({group_id:S.me.group_id, seller_id:f.get('seller_id'), gift_name:f.get('gift_name').trim(), quantity:Number(f.get('quantity')), created_by:S.me.id}));
       m.close(); toast('Obsequios enviados'); await loadAll(); render();
     }, $('button[type=submit]', m));
   };

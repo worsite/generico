@@ -79,6 +79,7 @@ create table if not exists public.gift_assignments (
   id          uuid primary key default gen_random_uuid(),
   group_id    uuid not null references public.groups(id) on delete cascade,
   seller_id   uuid references public.profiles(id) on delete cascade,
+  gift_name   text not null default 'Obsequio',
   quantity    integer not null check (quantity > 0),
   status      text not null default 'pendiente' check (status in ('pendiente','aceptado','rechazado')),
   created_by  uuid references public.profiles(id) on delete set null,
@@ -89,12 +90,21 @@ create table if not exists public.gift_deliveries (
   id               uuid primary key default gen_random_uuid(),
   group_id         uuid not null references public.groups(id) on delete cascade,
   seller_id        uuid references public.profiles(id) on delete set null,
+  appointment_id   uuid references public.appointments(id) on delete set null,
+  gift_name        text not null default 'Obsequio',
   quantity         integer not null default 1 check (quantity > 0),
   recipient_name   text not null,
   recipient_contact text,
   reason           text not null,
+  delivered_at     date not null default current_date,
   created_at       timestamptz not null default now()
 );
+
+-- Actualizacion de instalaciones anteriores (no hace nada si ya existen)
+alter table public.gift_assignments add column if not exists gift_name text not null default 'Obsequio';
+alter table public.gift_deliveries  add column if not exists gift_name text not null default 'Obsequio';
+alter table public.gift_deliveries  add column if not exists appointment_id uuid references public.appointments(id) on delete set null;
+alter table public.gift_deliveries  add column if not exists delivered_at date not null default current_date;
 
 create table if not exists public.notifications (
   id          uuid primary key default gen_random_uuid(),
@@ -311,12 +321,12 @@ begin
   if tg_op = 'INSERT' then
     insert into public.notifications(group_id, user_id, type, title, body)
       values (new.group_id, new.seller_id, 'obsequio', 'Te enviaran obsequios',
-        'El administrador te asigno ' || new.quantity || ' obsequio(s). Aceptalos en la seccion Obsequios.');
+        'El administrador te asigno ' || new.quantity || ' x ' || new.gift_name || '. Aceptalos en la seccion Obsequios.');
   elsif old.status = 'pendiente' and new.status in ('aceptado','rechazado') then
     select full_name into v_name from public.profiles where id = new.seller_id;
     perform public.notify_managers(new.group_id, 'obsequio',
       'Obsequios ' || new.status, coalesce(v_name,'Un vendedor') || ' ' ||
-      case when new.status = 'aceptado' then 'acepto' else 'rechazo' end || ' ' || new.quantity || ' obsequio(s).');
+      case when new.status = 'aceptado' then 'acepto' else 'rechazo' end || ' ' || new.quantity || ' x ' || new.gift_name || '.');
   end if;
   return new;
 end $$;
@@ -329,7 +339,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_admin() then
     new.quantity := old.quantity; new.seller_id := old.seller_id;
-    new.group_id := old.group_id; new.created_by := old.created_by;
+    new.group_id := old.group_id; new.created_by := old.created_by; new.gift_name := old.gift_name;
     if old.status <> 'pendiente' then new.status := old.status; end if;
     if new.status not in ('aceptado','rechazado','pendiente') then new.status := old.status; end if;
   end if;
@@ -339,16 +349,17 @@ drop trigger if exists gift_assign_guard on public.gift_assignments;
 create trigger gift_assign_guard before update on public.gift_assignments
   for each row execute function public.gift_assign_guard();
 
--- Entregas: no se puede entregar mas de lo aceptado
+-- Entregas: no se puede entregar mas de lo aceptado de ESE obsequio
 create or replace function public.gift_delivery_check() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_accepted int; v_delivered int;
 begin
   select coalesce(sum(quantity),0) into v_accepted from public.gift_assignments
-    where seller_id = new.seller_id and status = 'aceptado';
-  select coalesce(sum(quantity),0) into v_delivered from public.gift_deliveries where seller_id = new.seller_id;
+    where seller_id = new.seller_id and status = 'aceptado' and lower(trim(gift_name)) = lower(trim(new.gift_name));
+  select coalesce(sum(quantity),0) into v_delivered from public.gift_deliveries
+    where seller_id = new.seller_id and lower(trim(gift_name)) = lower(trim(new.gift_name));
   if new.quantity + v_delivered > v_accepted then
-    raise exception 'No tienes suficientes obsequios disponibles';
+    raise exception 'No tienes suficientes unidades de "%" disponibles', new.gift_name;
   end if;
   return new;
 end $$;
