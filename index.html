@@ -296,7 +296,7 @@ footer strong{color:#fff}
         card.appendChild(el('h3',null,i[0]));
         var k=el('div','know');k.appendChild(el('b',null,i[1]?'¿Sabías qué? · '+i[1]:'¿Sabías qué?'));k.appendChild(document.createTextNode(i[2]));
         card.appendChild(k);
-        var a=el('a','btn btn-wa','Consultar por WhatsApp');a.href=wa('Hola Tramicuba, quiero información sobre: '+i[0]+'.');a.target='_blank';a.rel='noopener';
+        var a=el('a','btn btn-wa','Cotizar por WhatsApp');a.href=wa('Hola Tramicuba, quiero cotizar: '+i[0]+'.');a.target='_blank';a.rel='noopener';
         card.appendChild(a);g.appendChild(card);shown++;
       });
       sec.appendChild(g);list.appendChild(sec);
