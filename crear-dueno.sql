@@ -3,15 +3,15 @@
 --
 -- 1) Ejecuta antes schema.sql completo.
 -- 2) En Supabase: Authentication > Users > Add user > Create new user
---      Email:    ukeiyo@ukeiyo.app
+--      Email:    kafel.agency@gmail.com
 --      Password: la contraseña que tú elijas
 --      Marca "Auto Confirm User".
 -- 3) Ejecuta este script en SQL Editor.
--- 4) Abre control.html e ingresa con usuario "Ukeiyo" y esa contraseña.
+-- 4) Abre control.html e ingresa con el correo completo en Usuario y esa contraseña.
 -- =====================================================================
 
 insert into public.platform_owner(user_id)
-select id from auth.users where email = 'ukeiyo@ukeiyo.app'
+select id from auth.users where email = 'kafel.agency@gmail.com'
 on conflict do nothing;
 
 -- Debe devolver 1 fila. Si sale vacío, el usuario del paso 2 no existe o el correo no coincide.
