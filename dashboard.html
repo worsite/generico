@@ -156,6 +156,42 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .notif.unread{border-left:4px solid var(--primary);background:#F8FAFF}
 .notif+.notif{margin-top:8px}
 .code{font-family:var(--mono);font-weight:600;letter-spacing:.06em;background:var(--primary-soft);color:var(--primary-dark);padding:4px 10px;border-radius:7px}
+.kpi.click{cursor:pointer;text-align:left;width:100%;display:block;transition:border-color .15s,background .15s}
+.kpi.click:hover{border-color:var(--primary);background:#F8FAFF}
+.kpi .go{margin-left:auto;color:var(--primary)}
+.banner:not(:empty){padding:10px 24px;font-size:14px;display:flex;gap:10px;align-items:center;background:var(--warn-soft);color:var(--warn);border-bottom:1px solid #FCD34D}
+.hist{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.hist-head,.hist-row{display:grid;grid-template-columns:minmax(110px,1.1fr) 112px 1.8fr 20px;gap:12px;align-items:center;width:100%;text-align:left;padding:11px 14px}
+.hist-head{background:var(--muted-bg);font-size:12.5px;font-weight:600;color:var(--muted)}
+.hist-row{border:0;border-top:1px solid var(--border);background:#fff}
+.hist-row:hover{background:#F8FAFF}
+.hist-row .chev{color:var(--muted)}
+.chat{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 150px);min-height:460px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.clist{border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.clist .search{padding:10px;border-bottom:1px solid var(--border)}
+.clist .items{overflow-y:auto;flex:1}
+.citem{display:flex;gap:12px;align-items:center;width:100%;text-align:left;border:0;background:transparent;padding:11px 14px;border-bottom:1px solid #EEF2F7}
+.citem:hover{background:var(--muted-bg)} .citem.on{background:var(--primary-soft)}
+.av{width:42px;height:42px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:600;flex:none}
+.av.grp{background:var(--accent)}
+.citem .meta{flex:1;min-width:0;display:block}
+.citem .nm{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.citem .pv{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.citem .pv .tx{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cpane{display:flex;flex-direction:column;min-width:0;min-height:0;background:#EFEAE2}
+.chead{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fff;border-bottom:1px solid var(--border)}
+.cmsgs{flex:1;overflow-y:auto;padding:14px 5%;display:flex;flex-direction:column;gap:4px}
+.day-sep{align-self:center;background:#fff;color:var(--muted);font-size:12px;padding:3px 10px;border-radius:8px;margin:8px 0;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.bub{max-width:min(520px,82%);padding:7px 10px 5px;border-radius:9px;background:#fff;box-shadow:0 1px 1px rgba(0,0,0,.1);overflow-wrap:anywhere;white-space:pre-wrap;align-self:flex-start}
+.bub.me{background:#D9FDD3;align-self:flex-end}
+.bub .who{font-size:12.5px;font-weight:600;color:var(--primary-dark)}
+.bub .tm{font-size:11px;color:var(--muted);text-align:right;margin-top:2px;white-space:nowrap}
+.bub .tick{color:#94A3B8;margin-left:4px} .bub .tick.read{color:#2563EB}
+.refc{display:block;width:100%;text-align:left;border:0;border-left:4px solid var(--primary);background:rgba(15,23,42,.06);border-radius:6px;padding:6px 8px;margin-bottom:5px;white-space:normal}
+.compose{display:flex;gap:8px;padding:10px;background:#F0F2F5;align-items:flex-end}
+.compose textarea{min-height:42px;max-height:130px;border-radius:21px;padding:10px 14px;resize:none}
+.cempty{flex:1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
+.chat .back{display:none}
 .scrim{display:none}
 
 @media (max-width:900px){
@@ -175,6 +211,15 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
   .seg{margin-left:0}
   .appt{grid-template-columns:56px 1fr}
   .appt>:last-child{grid-column:1/-1}
+  .chat{grid-template-columns:1fr;height:calc(100vh - 120px)}
+  .chat.open-pane .clist{display:none}
+  .chat:not(.open-pane) .cpane{display:none}
+  .chat .back{display:inline-flex}
+  .hist-head{display:none}
+  .hist-row{grid-template-columns:1fr 1fr}
+  .hist-row .c3{grid-column:1/-1;order:3}
+  .hist-row .chev{display:none}
+  .banner:not(:empty){padding:10px 16px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -211,6 +256,9 @@ const TYPES = {mantenimiento:'Mantenimiento', demo:'Demo', servicio_adicional:'S
 const STATUS = {pendiente:'Pendiente', venta:'Venta', sin_venta:'Sin venta', cancelada:'Cancelada'};
 const STATUS_PILL = {pendiente:'blue', venta:'green', sin_venta:'', cancelada:'red'};
 const ROLES = {admin:'Administrador', agendador:'Agendador', vendedor:'Vendedor'};
+// La comision se calcula sobre la venta sin IVA (venta / 1,19). Admin: 30 %. Vendedor y agendador: 18 % por defecto.
+const IVA = 1.19, ADMIN_PCT = 30;
+const netOf = s => s.net_amount != null ? Number(s.net_amount) : Number(s.amount) / IVA;
 
 const ICONS = {
   home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -228,6 +276,7 @@ const ICONS = {
   edit:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   send:'<path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/>', check:'<path d="M20 6 9 17l-5-5"/>',
   chart:'<path d="M3 3v18h18M7 14l4-4 4 4 5-6"/>',
+  chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
@@ -277,33 +326,38 @@ function confirmDlg(msg, okLabel = 'Confirmar', danger = true) {
    Estado
    ===================================================================== */
 const S = {
-  user:null, me:null, group:null, view:'resumen',
-  appts:[], sales:[], refs:[], assigns:[], deliveries:[], notifs:[], team:[],
+  user:null, me:null, group:null, view:'resumen', sub:null,
+  appts:[], sales:[], refs:[], assigns:[], deliveries:[], notifs:[], team:[], members:[], msgs:[], reads:[],
   cal:{mode:'mes', date:new Date()},
   f:{seller:'', type:'', status:'', q:''},
+  chat:{peer:null, q:'', rendered:null}, hist:{kind:null, seller:''}, rt:null, chatTimer:null,
   period:'mes', sellerFilterSales:'', booted:null, poll:null
 };
 const isAdmin = () => S.me?.role === 'admin';
-const isMgr = () => ['admin', 'agendador'].includes(S.me?.role);
-const person = id => id === S.me?.id ? 'Tú' : (S.team.find(t => t.id === id)?.full_name || (id ? 'Otro usuario' : 'Usuario eliminado'));
-const sellers = () => S.team.filter(t => t.status === 'activo');
+const isMgr = () => ['admin', 'agendador'].includes(S.me?.role);   // gestionan todas las agendas
+const person = id => id === S.me?.id ? 'Tú' : (S.members.find(t => t.id === id)?.full_name || S.team.find(t => t.id === id)?.full_name || (id ? 'Otro usuario' : 'Usuario eliminado'));
+const sellers = () => S.members.length ? S.members : S.team.filter(t => t.status === 'activo');
 const apptOf = id => S.appts.find(a => a.id === id);
 const saleOf = apptId => S.sales.find(s => s.appointment_id === apptId);
 const unread = () => S.notifs.filter(n => !n.read).length;
 
 async function loadAll() {
-  const [appts, sales, refs, assigns, deliveries, notifs, team] = await Promise.all([
+  const [appts, sales, refs, assigns, deliveries, notifs, team, members, msgs, reads] = await Promise.all([
     q(sb.from('appointments').select('*').order('event_date', {ascending:false})),
     q(sb.from('sales').select('*').order('created_at', {ascending:false})),
     q(sb.from('referrals').select('*').order('created_at', {ascending:false})),
     q(sb.from('gift_assignments').select('*').order('created_at', {ascending:false})),
     q(sb.from('gift_deliveries').select('*').order('created_at', {ascending:false})),
     q(sb.from('notifications').select('*').order('created_at', {ascending:false}).limit(100)),
-    q(sb.from('profiles').select('*').order('created_at', {ascending:true}))
+    q(sb.from('profiles').select('*').order('created_at', {ascending:true})),
+    q(sb.rpc('group_members')),
+    q(sb.from('messages').select('*').order('created_at', {ascending:false}).limit(1000)),
+    q(sb.from('chat_reads').select('*'))
   ]);
-  Object.assign(S, {appts, sales, refs, assigns, deliveries, notifs, team});
+  Object.assign(S, {appts, sales, refs, assigns, deliveries, notifs, team, members, msgs:msgs.reverse(), reads});
   const mine = team.find(t => t.id === S.user.id);
   if (mine) S.me = mine;
+  if (S.me?.role === 'admin') S.sub = await q(sb.rpc('my_subscription'));
 }
 async function loadNotifs() {
   const n = await q(sb.from('notifications').select('*').order('created_at', {ascending:false}).limit(100));
@@ -407,6 +461,20 @@ function renderPending() {
   $('#bOut').onclick = () => sb.auth.signOut();
 }
 
+function renderBlocked() {
+  stopPoll();
+  const s = S.sub || {};
+  $('#root').innerHTML = `<div class="auth"><div class="auth-card" style="text-align:center">
+    <div class="brand" style="justify-content:center"><span class="logo">${ic('chart')}</span>Dashboard de Ventas</div>
+    <h2>Acceso bloqueado</h2>
+    <p class="muted">Hola ${esc(S.me.full_name)}, ${s.manual ? 'el acceso a tu cuenta fue bloqueado por falta de pago' : 'tu mensualidad está vencida'}.
+    Debes pagar <b>${money(s.price)}</b> para tener nuevamente el acceso.</p>
+    ${s.paid_until ? `<p class="small muted">Fecha de vencimiento: ${fDay(s.paid_until)}.</p>` : ''}
+    <p class="small">Cuando realices el pago, el administrador de la plataforma lo registra y recuperas el acceso de inmediato. Tus vendedores siguen trabajando con normalidad.</p>
+    <div class="actions" style="justify-content:center"><button class="btn primary" id="bRef">Ya pagué, revisar</button><button class="btn" id="bOut">Salir</button></div></div></div>`;
+  $('#bRef').onclick = () => boot(true);
+  $('#bOut').onclick = () => sb.auth.signOut();
+}
 async function boot(force) {
   const {data:{session}} = await sb.auth.getSession();
   if (!session) { S.booted = null; return renderAuth(); }
@@ -414,18 +482,33 @@ async function boot(force) {
   S.booted = session.user.id; S.user = session.user;
   try {
     const me = await q(sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle());
-    if (!me) { toast('Tu perfil no existe. Ejecuta schema.sql en Supabase.', true); return renderAuth(); }
-    S.me = me;
+    if (!me) { toast('Esta cuenta no tiene un perfil del dashboard. Usa una cuenta creada desde "Crear mi cuenta".', true); await sb.auth.signOut(); return; }
+    S.me = me; S.sub = null;
     S.group = await q(sb.from('groups').select('*').eq('id', me.group_id).maybeSingle());
     if (me.status === 'pendiente') return renderPending();
+    if (me.role === 'admin') {
+      S.sub = await q(sb.rpc('my_subscription'));
+      if (S.sub?.blocked) return renderBlocked();
+    }
     await loadAll();
     S.group = S.group || await q(sb.from('groups').select('*').eq('id', me.group_id).maybeSingle());
     S.view = 'resumen';
-    renderShell(); render(); startPoll();
+    renderShell(); render(); startPoll(); subscribeRealtime();
   } catch (e) { console.error(e); toast(e.message, true); renderAuth(); }
 }
-function startPoll() { stopPoll(); S.poll = setInterval(() => run(loadNotifs), 20000); }
-function stopPoll() { clearInterval(S.poll); S.poll = null; }
+function startPoll() { stopPoll(); S.poll = setInterval(() => { run(loadNotifs); run(refreshMsgs); }, 20000); }
+function stopPoll() {
+  clearInterval(S.poll); S.poll = null; clearInterval(S.chatTimer); S.chatTimer = null;
+  try { if (S.rt) sb.removeChannel(S.rt); } catch (e) { /* sin tiempo real */ }
+  S.rt = null;
+}
+function subscribeRealtime() {
+  try {
+    S.rt = sb.channel('msgs-' + S.me.id)
+      .on('postgres_changes', {event:'INSERT', schema:'public', table:'messages'}, p => onNewMsg(p.new))
+      .subscribe();
+  } catch (e) { console.warn('Tiempo real no disponible, se usa actualización periódica', e); }
+}
 
 sb.auth.onAuthStateChange((ev, session) => {
   if (ev === 'SIGNED_OUT') { S.booted = null; renderAuth(); }
@@ -437,9 +520,10 @@ sb.auth.onAuthStateChange((ev, session) => {
    Shell y navegacion
    ===================================================================== */
 function navItems() {
-  const base = [['resumen','Resumen','home'], ['agenda', isMgr() ? 'Agendas' : 'Mi agenda','calendar'], ['ventas', isMgr() ? 'Ventas' : 'Mis ventas','dollar'], ['referidos','Referidos','share']];
-  if (isMgr()) base.push(['equipo','Equipo','users']);
-  base.push(['obsequios','Obsequios','gift'], ['notificaciones','Notificaciones','bell'], ['perfil','Mi perfil','user']);
+  const adm = isAdmin();
+  const base = [['resumen','Resumen','home'], ['agenda', isMgr() ? 'Agendas' : 'Mi agenda','calendar'], ['ventas', adm ? 'Ventas' : 'Mis ventas','dollar'], ['referidos','Referidos','share']];
+  if (adm) base.push(['equipo','Equipo','users']);
+  base.push(['obsequios','Obsequios','gift'], ['chat','Chats','chat'], ['notificaciones','Notificaciones','bell'], ['perfil','Mi perfil','user']);
   return base;
 }
 function renderShell() {
@@ -457,6 +541,7 @@ function renderShell() {
         <div class="grow"><h1 id="title"></h1></div>
         <button class="btn icon" id="bBell" aria-label="Notificaciones" style="position:relative">${ic('bell')}<span class="badge" id="bellN" style="position:absolute;top:-6px;right:-6px" hidden></span></button>
       </header>
+      <div class="banner" id="banner"></div>
       <main class="content" id="main"></main>
     </div></div>`;
   $('#bOut').onclick = () => sb.auth.signOut();
@@ -472,8 +557,9 @@ function updateBell() {
   const n = unread();
   const b = $('#bellN'); if (b) { b.hidden = !n; b.textContent = n > 9 ? '9+' : n; }
   const nb = $('#navBadge'); if (nb) { nb.hidden = !n; nb.textContent = n; }
+  const c = unreadChats(), cb = $('#navChat'); if (cb) { cb.hidden = !c; cb.textContent = c > 99 ? '99+' : c; }
 }
-function pendingCount() { return S.team.filter(t => t.status === 'pendiente').length + (isAdmin() ? S.team.filter(t => t.delete_requested).length : 0); }
+function pendingCount() { if (!isAdmin()) return 0; return S.team.filter(t => t.status === 'pendiente').length + (isAdmin() ? S.team.filter(t => t.delete_requested).length : 0); }
 function go(view) {
   S.view = view; toggleSide(false); render();
   run(async () => { await loadAll(); if (S.view === view && !$('.ov')) render(); });
@@ -481,17 +567,30 @@ function go(view) {
 const VIEWS = {};
 function render() {
   if (!S.me) return;
+  if (S.sub?.blocked) return renderBlocked();
   const titles = Object.fromEntries(navItems().map(n => [n[0], n[1]]));
   if (!titles[S.view]) S.view = 'resumen';
   $('#title').textContent = titles[S.view];
   const eq = pendingCount();
   $('#nav').innerHTML = navItems().map(([k, l, i]) => `<button data-go="${k}" class="${S.view === k ? 'on' : ''}" ${S.view === k ? 'aria-current="page"' : ''}>${ic(i)}${l}
     ${k === 'notificaciones' ? `<span class="badge" id="navBadge" ${unread() ? '' : 'hidden'}>${unread()}</span>` : ''}
+    ${k === 'chat' ? `<span class="badge" id="navChat" ${unreadChats() ? '' : 'hidden'}>${unreadChats()}</span>` : ''}
     ${k === 'equipo' && eq ? `<span class="badge">${eq}</span>` : ''}</button>`).join('');
   $$('#nav [data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
   Object.values(charts).forEach(c => c.destroy()); for (const k in charts) delete charts[k];
+  $('#banner').innerHTML = subBanner();
+  clearInterval(S.chatTimer); S.chatTimer = null;
+  if (S.view === 'chat') S.chatTimer = setInterval(() => run(refreshMsgs), 5000);
   VIEWS[S.view]($('#main'));
   updateBell();
+}
+
+// Aviso de mensualidad para el administrador (3 dias antes por defecto)
+function subBanner() {
+  const s = S.sub;
+  if (!isAdmin() || !s || s.blocked || s.days_left == null || s.days_left > (s.warn_days ?? 3)) return '';
+  const cuando = s.days_left <= 0 ? 'vence hoy' : `vence en ${s.days_left} día${s.days_left === 1 ? '' : 's'}`;
+  return `${ic('bell')}<span>Tu mensualidad de <b>${money(s.price)}</b> ${cuando} (${fDay(s.paid_until)}). Realiza el pago para no perder el acceso.</span>`;
 }
 
 /* acciones por delegacion (evita handlers inline) */
@@ -550,48 +649,58 @@ function giftBreakdown(sellerId) {
   S.deliveries.filter(d => d.seller_id === sellerId).forEach(d => { get(d.gift_name).delivered += d.quantity; });
   return [...m.values()].map(g => ({...g, available:g.accepted - g.delivered})).sort((a, b) => a.name.localeCompare(b.name));
 }
+const periodName = () => S.period === 'mes' ? new Date().toLocaleDateString('es-CO', {month:'long', year:'numeric'})
+  : ({'3m':'últimos 3 meses', anio:'este año', todo:'todo el historial'}[S.period]);
 VIEWS.resumen = el => {
-  const from = periodStart(S.period);
-  const ap = S.appts.filter(a => new Date(a.event_date) >= from && new Date(a.event_date) < periodEnd(S.period));
-  const apPast = ap.filter(a => new Date(a.event_date) <= new Date());
-  const sa = S.sales.filter(s => new Date(s.created_at) >= from);
-  const rf = S.refs.filter(r => new Date(r.created_at) >= from);
-  const total = sum(sa, s => s.amount), comm = sum(sa, s => s.commission_amount);
+  const from = periodStart(S.period), to = periodEnd(S.period);
+  const inP = d => { const x = new Date(d); return x >= from && x < to; };
+  const adm = isAdmin();
+  const mine = r => adm || r.seller_id === S.me.id;
+  const ap = S.appts.filter(a => mine(a) && inP(a.event_date));
+  const sa = S.sales.filter(s => mine(s) && inP(s.created_at));
+  const rf = S.refs.filter(r => mine(r) && inP(r.created_at));
+  const dl = S.deliveries.filter(d => mine(d) && inP(d.delivered_at || d.created_at));
+  const total = sum(sa, s => s.amount), net = sum(sa, netOf), sellerComm = sum(sa, s => s.commission_amount);
+  const adminComm = net * ADMIN_PCT / 100;
   const valid = ap.filter(a => a.status !== 'cancelada').length;
   const conv = valid ? Math.round(sa.length / valid * 100) : 0;
-  const mgr = isMgr();
-  const gifts = mgr ? {available:S.team.reduce((t, p) => t + giftStats(p.id).available, 0)} : giftStats(S.me.id);
-  const k = (l, v, ico, cls = '') => `<div class="card kpi ${cls}"><div class="l">${ic(ico)}${l}</div><div class="v">${v}</div></div>`;
-  const upcoming = S.appts.filter(a => a.status === 'pendiente' && new Date(a.event_date) >= new Date(Date.now() - 36e5)).sort((a, b) => new Date(a.event_date) - new Date(b.event_date)).slice(0, 6);
+  const gifts = giftStats(S.me.id);
+  const k = (l, v, ico, cls = '', hist = '') => hist
+    ? `<button type="button" class="card kpi click ${cls}" data-act="hist" data-k="${hist}" aria-label="Ver historial de ${l.toLowerCase()}"><div class="l">${ic(ico)}${l}<span class="go">${ic('right')}</span></div><div class="v">${v}</div></button>`
+    : `<div class="card kpi ${cls}"><div class="l">${ic(ico)}${l}</div><div class="v">${v}</div></div>`;
+  const upcoming = S.appts.filter(a => mine(a) && a.status === 'pendiente' && new Date(a.event_date) >= new Date(Date.now() - 36e5)).sort((a, b) => new Date(a.event_date) - new Date(b.event_date)).slice(0, 6);
+  const groupAp = S.appts.filter(a => inP(a.event_date)).length;
   el.innerHTML = `
-    <div class="pagehead"><div class="grow"><h2>${mgr ? 'Vista general del grupo' : 'Hola, ' + esc(S.me.full_name.split(' ')[0])}</h2>
-      ${isAdmin() ? `<div class="small muted">Código de tu grupo: <span class="code">${esc(S.group?.code || '')}</span> <button class="btn sm icon" data-act="copyCode" aria-label="Copiar código">${ic('copy')}</button></div>` : `<div class="small muted">${esc(S.group?.name || '')}${S.me.role === 'vendedor' ? ' · tu comisión: <b>' + S.me.commission_pct + '%</b>' : ''}</div>`}</div>
+    <div class="pagehead"><div class="grow"><h2>${adm ? 'Vista general del grupo' : 'Hola, ' + esc(S.me.full_name.split(' ')[0])}</h2>
+      ${adm ? `<div class="small muted">Código de tu grupo: <span class="code">${esc(S.group?.code || '')}</span> <button class="btn sm icon" data-act="copyCode" aria-label="Copiar código">${ic('copy')}</button></div>` : `<div class="small muted">${esc(S.group?.name || '')} · tu comisión: <b>${S.me.commission_pct}%</b> sobre la venta sin IVA</div>`}</div>
       <select id="period" style="width:auto" aria-label="Periodo"><option value="mes">Este mes</option><option value="3m">Últimos 3 meses</option><option value="anio">Este año</option><option value="todo">Todo</option></select></div>
     <div class="grid kpis">
-      ${k('Citas', ap.length, 'calendar')}
-      ${k('Ventas', sa.length, 'check', 'g')}
+      ${k('Citas', ap.length, 'calendar', '', adm ? 'citas' : '')}
+      ${S.me.role === 'agendador' ? k('Citas del grupo', groupAp, 'users', '', 'citas') : ''}
+      ${k('Ventas', sa.length, 'check', 'g', adm ? 'ventas' : '')}
       ${k('Total vendido', money(total), 'dollar', 'b')}
-      ${k(mgr ? 'Comisiones' : 'Mi comisión', money(comm), 'dollar', 'g')}
+      ${adm ? k(`Mi comisión (${ADMIN_PCT}%)`, money(adminComm), 'dollar', 'g') + k('Comisión vendedores', money(sellerComm), 'dollar') : k('Mi comisión', money(sellerComm), 'dollar', 'g')}
       ${k('Conversión', conv + '%', 'chart')}
-      ${k('Referidos', rf.length, 'share')}
-      ${k(mgr ? 'Obsequios en campo' : 'Obsequios disponibles', gifts.available, 'gift')}
-      ${mgr ? k('Vendedores activos', S.team.filter(t => t.status === 'activo' && t.role === 'vendedor').length, 'users') : ''}
+      ${k('Referidos', rf.length, 'share', '', adm ? 'referidos' : '')}
+      ${adm ? k('Obsequios entregados', sum(dl, d => d.quantity), 'gift', '', 'obsequios') : k('Obsequios disponibles', gifts.available, 'gift')}
+      ${adm ? k('Vendedores activos', S.team.filter(t => t.status === 'activo' && t.role !== 'admin').length, 'users') : ''}
     </div>
-    ${mgr && pendingCount() ? `<div class="card" style="margin-bottom:16px;border-color:#FCD34D;background:var(--warn-soft)"><b>${pendingCount()} solicitud(es) pendiente(s)</b> en Equipo. <button class="btn sm" data-go2="equipo" style="margin-left:8px">Revisar</button></div>` : ''}
+    ${adm && pendingCount() ? `<div class="card" style="margin-bottom:16px;border-color:#FCD34D;background:var(--warn-soft)"><b>${pendingCount()} solicitud(es) pendiente(s)</b> en Equipo. <button class="btn sm" data-go2="equipo" style="margin-left:8px">Revisar</button></div>` : ''}
     <div class="grid cols2">
       <div class="card"><h2>Ventas por mes</h2>${chartBox('cMonth', 'Ventas y comisiones por mes')}</div>
-      <div class="card"><h2>${mgr ? 'Ventas por vendedor' : 'Citas por tipo'}</h2>${chartBox('cB', mgr ? 'Ventas por vendedor' : 'Citas por tipo')}</div>
-      <div class="card"><h2>${mgr ? 'Citas por vendedor' : 'Resultado de las citas'}</h2>${chartBox('cC', 'Distribución de citas')}</div>
+      <div class="card"><h2>${adm ? 'Ventas por vendedor' : 'Citas por tipo'}</h2>${chartBox('cB', adm ? 'Ventas por vendedor' : 'Citas por tipo')}</div>
+      <div class="card"><h2>${adm ? 'Citas por vendedor' : 'Resultado de las citas'}</h2>${chartBox('cC', 'Distribución de citas')}</div>
       <div class="card"><h2>Próximas citas</h2>${upcoming.length ? `<div class="dayview">${upcoming.map(apptCard).join('')}</div>` : '<div class="empty">No hay citas pendientes.</div>'}</div>
     </div>`;
   $('#period').value = S.period; $('#period').onchange = e => { S.period = e.target.value; render(); };
   const gb = $('[data-go2]', el); if (gb) gb.onclick = () => go(gb.dataset.go2);
   const months = monthsBack(6);
+  const inM = (arr, m, d) => arr.filter(r => mine(r) && mkey(d(r)) === m.key);
   chart('cMonth', {type:'bar', data:{labels:months.map(m => m.label), datasets:[
-    {label:'Ventas', data:months.map(m => sum(S.sales.filter(s => mkey(s.created_at) === m.key), s => s.amount)), backgroundColor:PAL[0], borderRadius:4},
-    {label:'Comisión', data:months.map(m => sum(S.sales.filter(s => mkey(s.created_at) === m.key), s => s.commission_amount)), backgroundColor:PAL[1], borderRadius:4}]},
+    {label:'Ventas', data:months.map(m => sum(inM(S.sales, m, r => r.created_at), r => r.amount)), backgroundColor:PAL[0], borderRadius:4},
+    {label:adm ? `Mi comisión (${ADMIN_PCT}%)` : 'Mi comisión', data:months.map(m => adm ? sum(inM(S.sales, m, r => r.created_at), netOf) * ADMIN_PCT / 100 : sum(inM(S.sales, m, r => r.created_at), r => r.commission_amount)), backgroundColor:PAL[1], borderRadius:4}]},
     options:{plugins:{tooltip:{callbacks:{label:c => `${c.dataset.label}: ${money(c.parsed.y)}`}}}, scales:{y:{ticks:{callback:v => money(v)}}}}});
-  if (mgr) {
+  if (adm) {
     const ids = [...new Set([...sa.map(s => s.seller_id), ...ap.map(a => a.seller_id)])];
     chart('cB', {type:'bar', data:{labels:ids.map(person), datasets:[{label:'Ventas', data:ids.map(i => sum(sa.filter(s => s.seller_id === i), s => s.amount)), backgroundColor:PAL[0], borderRadius:4}]},
       options:{indexAxis:'y', plugins:{legend:{display:false}, tooltip:{callbacks:{label:c => money(c.parsed.x)}}}, scales:{x:{ticks:{callback:v => money(v)}}}}});
@@ -727,7 +836,7 @@ function apptDetail(id) {
   const a = apptOf(id); if (!a) return;
   $$('.ov').forEach(o => o.close?.());
   const sale = saleOf(a.id), refs = S.refs.filter(r => r.appointment_id === a.id), dels = S.deliveries.filter(x => x.appointment_id === a.id);
-  const canEdit = isMgr() || a.seller_id === S.me.id;
+  const own = a.seller_id === S.me.id, canEdit = isMgr() || own, canWork = own || isAdmin();   // el agendador gestiona la agenda, pero no las ventas ajenas
   const m = modal('Detalle de la cita', `
     <dl class="kv">
       <dt>Cliente</dt><dd><b>${esc(a.client_name)}</b></dd>
@@ -742,16 +851,17 @@ function apptDetail(id) {
     </dl>
     ${sale ? `<div class="card" style="background:var(--accent-soft);border-color:#A7E3CB;margin-bottom:12px"><b>Venta registrada</b>
       <div class="mono" style="font-size:20px;margin:4px 0">${money(sale.amount)}</div>
+      <div class="small muted">Sin IVA: ${money(netOf(sale))}</div>
       <div class="small">Comisión (${sale.commission_pct}%): <b>${money(sale.commission_amount)}</b></div>
       ${sale.notes ? `<div class="small muted" style="margin-top:4px">${esc(sale.notes)}</div>` : ''}
-      <div class="actions" style="margin-top:8px"><button class="btn sm" data-act="editSale" data-id="${sale.id}">${ic('edit')} Editar venta</button></div></div>` : ''}
+      ${canWork ? `<div class="actions" style="margin-top:8px"><button class="btn sm" data-act="editSale" data-id="${sale.id}">${ic('edit')} Editar venta</button></div>` : ''}</div>` : ''}
     ${refs.length ? `<div style="margin-bottom:12px"><b>Referidos (${refs.length})</b>${refs.map(r => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${esc(r.name)}</b> <span class="muted small">${esc(r.phone || '')}</span><div class="small muted">${esc(r.address || '')} ${r.notes ? '· ' + esc(r.notes) : ''}</div></div>`).join('')}</div>` : ''}
     ${dels.length ? `<div style="margin-bottom:12px"><b>Obsequios entregados (${sum(dels, x => x.quantity)})</b>${dels.map(x => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${x.quantity} × ${esc(x.gift_name)}</b> <span class="muted small">· ${fDay(x.delivered_at || x.created_at)}</span><div class="small muted">Para ${esc(x.recipient_name)} · ${esc(x.reason)}</div></div>`).join('')}</div>` : ''}
     ${canEdit ? `<div class="mf" style="justify-content:flex-start">
-      ${sale ? '' : `<button class="btn green" data-act="markSale" data-id="${a.id}">${ic('dollar')} Marcar venta</button>`}
-      <button class="btn" data-act="addRef" data-id="${a.id}">${ic('plus')} Referidos</button>
-      ${a.seller_id === S.me.id ? `<button class="btn" data-act="newDelivery" data-appt="${a.id}">${ic('gift')} Obsequio entregado</button>` : ''}
-      ${a.status === 'pendiente' ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="sin_venta">Sin venta</button>` : ''}
+      ${canWork && !sale ? `<button class="btn green" data-act="markSale" data-id="${a.id}">${ic('dollar')} Marcar venta</button>` : ''}
+      ${canWork ? `<button class="btn" data-act="addRef" data-id="${a.id}">${ic('plus')} Referidos</button>` : ''}
+      ${own ? `<button class="btn" data-act="newDelivery" data-appt="${a.id}">${ic('gift')} Obsequio entregado</button>` : ''}
+      ${canWork && a.status === 'pendiente' ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="sin_venta">Sin venta</button>` : ''}
       ${a.status !== 'pendiente' && !sale ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="pendiente">Reabrir</button>` : ''}
       ${a.status !== 'cancelada' && !sale ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="cancelada">Cancelar cita</button>` : ''}
       <button class="btn" data-act="editAppt" data-id="${a.id}">${ic('edit')} Editar</button>
@@ -779,7 +889,8 @@ function saleForm(a, sale) {
     <label class="f"><span>Observaciones</span><textarea name="notes">${esc(sale?.notes)}</textarea></label>
     <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn green" type="submit">Guardar venta</button></div></form>`);
   const pct = sale ? sale.commission_pct : (S.team.find(t => t.id === (a.seller_id || S.me.id))?.commission_pct ?? S.me.commission_pct);
-  const upd = () => { $('#cm', m).textContent = `Comisión estimada (${pct}%): ${money(($('[name=amount]', m).value || 0) * pct / 100)}`; };
+  const upd = () => { const v = Number($('[name=amount]', m).value || 0), base = v / IVA;
+    $('#cm', m).textContent = `Sin IVA (÷ 1,19): ${money(base)} · Comisión estimada (${pct}% de la venta sin IVA): ${money(base * pct / 100)}`; };
   $('[name=amount]', m).oninput = upd; upd();
   $('#fS', m).onsubmit = e => {
     e.preventDefault();
@@ -829,9 +940,9 @@ VIEWS.referidos = el => {
   const sel = S.f.rseller || '';
   const list = S.refs.filter(r => !sel || r.seller_id === sel);
   el.innerHTML = `<div class="pagehead"><div class="grow"><div class="small muted">Personas que te recomendaron tus clientes. Para agregar uno, abre una cita y pulsa "+ Referidos".</div></div></div>
-    ${isMgr() ? `<div class="toolbar"><select id="rs" aria-label="Vendedor"><option value="">Todos los vendedores</option>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></div>` : ''}
-    ${list.length ? `<div class="tw"><table><thead><tr><th>Referido</th><th>Teléfono</th><th>Dirección</th><th>Referido por (cliente)</th>${isMgr() ? '<th>Vendedor</th>' : ''}<th>Fecha</th><th></th></tr></thead><tbody>
-    ${list.map(r => `<tr><td><b>${esc(r.name)}</b><div class="small muted">${esc(r.notes || '')}</div></td><td>${esc(r.phone || '—')}</td><td>${esc(r.address || '—')}</td><td>${esc(apptOf(r.appointment_id)?.client_name || '—')}</td>${isMgr() ? `<td>${esc(person(r.seller_id))}</td>` : ''}<td>${fDate(r.created_at)}</td>
+    ${isAdmin() ? `<div class="toolbar"><select id="rs" aria-label="Vendedor"><option value="">Todos los vendedores</option>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></div>` : ''}
+    ${list.length ? `<div class="tw"><table><thead><tr><th>Referido</th><th>Teléfono</th><th>Dirección</th><th>Referido por (cliente)</th>${isAdmin() ? '<th>Vendedor</th>' : ''}<th>Fecha</th><th></th></tr></thead><tbody>
+    ${list.map(r => `<tr><td><b>${esc(r.name)}</b><div class="small muted">${esc(r.notes || '')}</div></td><td>${esc(r.phone || '—')}</td><td>${esc(r.address || '—')}</td><td>${esc(apptOf(r.appointment_id)?.client_name || '—')}</td>${isAdmin() ? `<td>${esc(person(r.seller_id))}</td>` : ''}<td>${fDate(r.created_at)}</td>
     <td><div class="actions"><button class="btn sm icon" data-act="editRef" data-id="${r.id}" aria-label="Editar">${ic('edit')}</button><button class="btn sm icon danger" data-act="delRef" data-id="${r.id}" aria-label="Eliminar">${ic('trash')}</button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aún no hay referidos.</div>'}`;
   const s = $('#rs'); if (s) { s.value = sel; s.onchange = e => { S.f.rseller = e.target.value; render(); }; }
 };
@@ -841,18 +952,20 @@ ACT.delRef = async d => { if (await confirmDlg('¿Eliminar este referido?', 'Eli
    Ventas
    ===================================================================== */
 VIEWS.ventas = el => {
-  const sel = S.sellerFilterSales;
+  const adm = isAdmin(), sel = S.sellerFilterSales;
   const list = S.sales.filter(s => !sel || s.seller_id === sel);
-  const total = sum(list, s => s.amount), comm = sum(list, s => s.commission_amount);
+  const total = sum(list, s => s.amount), net = sum(list, netOf), comm = sum(list, s => s.commission_amount);
+  const kp = (l, v, ico, cls = '') => `<div class="card kpi ${cls}"><div class="l">${ic(ico)}${l}</div><div class="v">${v}</div></div>`;
   el.innerHTML = `<div class="grid kpis">
-      <div class="card kpi"><div class="l">${ic('check')}Ventas</div><div class="v">${list.length}</div></div>
-      <div class="card kpi b"><div class="l">${ic('dollar')}Total vendido</div><div class="v">${money(total)}</div></div>
-      <div class="card kpi g"><div class="l">${ic('dollar')}${isMgr() ? 'Comisiones' : 'Mi comisión'}</div><div class="v">${money(comm)}</div></div>
-      <div class="card kpi"><div class="l">${ic('chart')}Ticket promedio</div><div class="v">${money(list.length ? total / list.length : 0)}</div></div></div>
-    ${isMgr() ? `<div class="toolbar"><select id="ss" aria-label="Vendedor"><option value="">Todos los vendedores</option>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></div>` : ''}
-    ${list.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Cliente</th>${isMgr() ? '<th>Vendedor</th>' : ''}<th class="num">Valor</th><th class="num">%</th><th class="num">Comisión</th><th>Observaciones</th><th></th></tr></thead><tbody>
-    ${list.map(s => { const a = apptOf(s.appointment_id); return `<tr><td>${fDate(s.created_at)}</td><td><b>${esc(a?.client_name || '—')}</b><div class="small muted">${a ? TYPES[a.type] : ''}</div></td>${isMgr() ? `<td>${esc(person(s.seller_id))}</td>` : ''}
-      <td class="num">${money(s.amount)}</td><td class="num">${s.commission_pct}%</td><td class="num" style="color:#047857">${money(s.commission_amount)}</td><td>${esc(s.notes || '')}</td>
+      ${kp('Ventas', list.length, 'check')}
+      ${kp('Total vendido', money(total), 'dollar', 'b')}
+      ${kp('Sin IVA (÷ 1,19)', money(net), 'dollar')}
+      ${adm ? kp(`Mi comisión (${ADMIN_PCT}%)`, money(net * ADMIN_PCT / 100), 'dollar', 'g') + kp('Comisión vendedores', money(comm), 'dollar') : kp('Mi comisión', money(comm), 'dollar', 'g')}
+      ${kp('Ticket promedio', money(list.length ? total / list.length : 0), 'chart')}</div>
+    ${adm ? `<div class="toolbar"><select id="ss" aria-label="Vendedor"><option value="">Todos los vendedores</option>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></div>` : ''}
+    ${list.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Cliente</th>${adm ? '<th>Vendedor</th>' : ''}<th class="num">Valor</th><th class="num">Sin IVA</th><th class="num">%</th><th class="num">Comisión</th><th>Observaciones</th><th></th></tr></thead><tbody>
+    ${list.map(s => { const a = apptOf(s.appointment_id); return `<tr><td>${fDate(s.created_at)}</td><td><b>${esc(a?.client_name || '—')}</b><div class="small muted">${a ? TYPES[a.type] : ''}</div></td>${adm ? `<td>${esc(person(s.seller_id))}</td>` : ''}
+      <td class="num">${money(s.amount)}</td><td class="num">${money(netOf(s))}</td><td class="num">${s.commission_pct}%</td><td class="num" style="color:#047857">${money(s.commission_amount)}</td><td>${esc(s.notes || '')}</td>
       <td><div class="actions"><button class="btn sm icon" data-act="editSale" data-id="${s.id}" aria-label="Editar">${ic('edit')}</button><button class="btn sm icon danger" data-act="delSale" data-id="${s.id}" aria-label="Eliminar">${ic('trash')}</button></div></td></tr>`; }).join('')}</tbody></table></div>`
     : '<div class="card empty">Todavía no hay ventas. Abre una cita y pulsa "Marcar venta".</div>'}`;
   const s = $('#ss'); if (s) { s.value = sel; s.onchange = e => { S.sellerFilterSales = e.target.value; render(); }; }
@@ -877,7 +990,7 @@ const delivTable = (list, mgr) => list.length ? `<div class="tw"><table><thead><
 const byDelivery = l => [...l].sort((x, y) => String(y.delivered_at || y.created_at).localeCompare(String(x.delivered_at || x.created_at)));
 
 VIEWS.obsequios = el => {
-  if (isMgr()) return giftsManager(el);
+  if (isAdmin()) return giftsManager(el);
   const g = giftStats(S.me.id), inv = giftBreakdown(S.me.id);
   const pend = S.assigns.filter(a => a.seller_id === S.me.id && a.status === 'pendiente');
   const dels = byDelivery(S.deliveries.filter(d => d.seller_id === S.me.id));
@@ -938,11 +1051,17 @@ function giftsManager(el) {
     ${rows.length ? `<div class="tw"><table><thead><tr><th>Vendedor</th><th>Obsequio</th><th class="num">Aceptados</th><th class="num">Pendientes</th><th class="num">Entregados</th><th class="num">Disponibles</th></tr></thead><tbody>
     ${rows.map(({p, g}) => `<tr><td><b>${esc(p.full_name)}</b><div class="small muted">${ROLES[p.role]}</div></td><td><b>${esc(g.name)}</b></td><td class="num">${g.accepted}</td><td class="num">${g.pending}</td><td class="num">${g.delivered}</td><td class="num"><b>${g.available}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Todavía no has enviado obsequios.</div>'}
     <div class="pagehead" style="margin-top:24px"><div class="grow"><h2>Envíos a vendedores</h2></div></div>
-    ${sent.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Vendedor</th><th>Obsequio</th><th class="num">Cant.</th><th>Estado</th></tr></thead><tbody>
-    ${sent.map(a => `<tr><td>${fDate(a.created_at)}</td><td>${esc(person(a.seller_id))}</td><td><b>${esc(a.gift_name)}</b></td><td class="num">${a.quantity}</td><td><span class="pill ${a.status === 'aceptado' ? 'green' : a.status === 'rechazado' ? 'red' : 'warn'}">${a.status[0].toUpperCase() + a.status.slice(1)}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Sin envíos todavía.</div>'}
+    ${sent.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Vendedor</th><th>Obsequio</th><th class="num">Cant.</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${sent.map(a => `<tr><td>${fDate(a.created_at)}</td><td>${esc(person(a.seller_id))}</td><td><b>${esc(a.gift_name)}</b></td><td class="num">${a.quantity}</td><td><span class="pill ${a.status === 'aceptado' ? 'green' : a.status === 'rechazado' ? 'red' : 'warn'}">${a.status[0].toUpperCase() + a.status.slice(1)}</span></td>
+      <td>${a.status === 'pendiente' ? `<button class="btn sm icon danger" data-act="delAssign" data-id="${a.id}" aria-label="Eliminar envío pendiente" title="Eliminar envío pendiente">${ic('trash')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Sin envíos todavía.</div>'}
     <div class="pagehead" style="margin-top:24px"><div class="grow"><h2>Entregas a clientes</h2></div></div>
     ${delivTable(byDelivery(S.deliveries), true)}`;
 }
+ACT.delAssign = async d => {
+  const a = S.assigns.find(x => x.id === d.id);
+  if (!await confirmDlg(`¿Eliminar el envío pendiente de ${a?.quantity} × ${a?.gift_name} para ${person(a?.seller_id)}? Ya no podrá aceptarlo y podrás enviárselo a otro vendedor.`, 'Eliminar envío')) return;
+  run(async () => { await q(sb.from('gift_assignments').delete().eq('id', d.id)); toast('Envío eliminado'); await loadAll(); render(); });
+};
 ACT.newAssign = () => {
   const names = [...new Set(S.assigns.map(a => a.gift_name))];
   const m = modal('Enviar obsequios', `<form id="fG"><label class="f"><span>Nombre del obsequio *</span><input name="gift_name" required maxlength="80" list="giftNames" placeholder="Ej: Llavero, Gorra, Set de limpieza" autocomplete="off"></label>
@@ -970,7 +1089,7 @@ VIEWS.equipo = el => {
   const stat = id => ({v:S.sales.filter(s => s.seller_id === id).length, c:S.appts.filter(a => a.seller_id === id).length});
   el.innerHTML = `
     <div class="pagehead"><div class="grow">${isAdmin() ? `<div class="small muted">Comparte este código para que tus vendedores se registren: <span class="code">${esc(S.group?.code || '')}</span> <button class="btn sm icon" data-act="copyCode" aria-label="Copiar código">${ic('copy')}</button></div>` : '<div class="small muted">Puedes aceptar o rechazar solicitudes de ingreso.</div>'}</div>
-      ${isAdmin() ? `<button class="btn" data-act="msgAll">${ic('send')} Mensaje a todos</button>` : ''}</div>
+      ${isAdmin() ? `<button class="btn" data-act="msgAll">${ic('chat')} Chat del grupo</button>` : ''}</div>
     ${pend.length ? `<div class="card" style="margin-bottom:16px;border-color:#FCD34D"><h2>Solicitudes de ingreso (${pend.length})</h2>
       ${pend.map(p => `<div class="actions" style="align-items:center;padding:8px 0;border-top:1px solid var(--border)"><div style="flex:1;min-width:180px"><b>${esc(p.full_name)}</b><div class="small muted">${esc(p.email || '')} ${p.phone ? '· ' + esc(p.phone) : ''}</div></div>
       <button class="btn green sm" data-act="accept" data-id="${p.id}">${ic('check')} Aceptar</button><button class="btn danger sm" data-act="reject" data-id="${p.id}">Rechazar</button></div>`).join('')}</div>` : ''}
@@ -982,7 +1101,7 @@ VIEWS.equipo = el => {
       <td>${isAdmin() && !me ? `<select data-role-for="${p.id}" aria-label="Cargo de ${esc(p.full_name)}" style="min-width:140px">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}" ${p.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select>` : ROLES[p.role]}</td>
       <td class="num">${isAdmin() ? `<input type="number" min="0" max="100" step="0.5" value="${p.commission_pct}" data-comm-for="${p.id}" aria-label="Comisión de ${esc(p.full_name)}" style="width:84px;text-align:right">` : p.commission_pct + '%'}</td>
       <td class="num">${s.c}</td><td class="num">${s.v}</td>
-      <td><div class="actions">${me ? '' : `<button class="btn sm icon" data-act="msgOne" data-id="${p.id}" aria-label="Enviar mensaje">${ic('send')}</button>`}${isAdmin() && !me ? `<button class="btn sm icon danger" data-act="removeUser" data-id="${p.id}" aria-label="Eliminar usuario">${ic('trash')}</button>` : ''}</div></td></tr>`; }).join('')}</tbody></table></div>`;
+      <td><div class="actions">${me ? '' : `<button class="btn sm icon" data-act="msgOne" data-id="${p.id}" aria-label="Enviar mensaje">${ic('chat')}</button>`}${isAdmin() && !me ? `<button class="btn sm icon danger" data-act="removeUser" data-id="${p.id}" aria-label="Eliminar usuario">${ic('trash')}</button>` : ''}</div></td></tr>`; }).join('')}</tbody></table></div>`;
   $$('[data-role-for]', el).forEach(s => s.onchange = () => run(async () => {
     await q(sb.from('profiles').update({role:s.value}).eq('id', s.dataset.roleFor)); toast('Cargo actualizado'); await loadAll(); render();
   }));
@@ -1002,23 +1121,8 @@ ACT.removeUser = async d => {
     run(async () => { await q(sb.rpc('admin_remove_user', {p_user:d.id})); toast('Usuario eliminado'); await loadAll(); render(); });
 };
 ACT.keepUser = d => run(async () => { await q(sb.from('profiles').update({delete_requested:false}).eq('id', d.id)); toast('Solicitud rechazada'); await loadAll(); render(); });
-ACT.msgOne = d => msgForm(d.id);
-ACT.msgAll = () => msgForm(null);
-function msgForm(uid) {
-  const m = modal(uid ? `Mensaje para ${person(uid)}` : 'Mensaje para todo el equipo', `<form id="fM">
-    <label class="f"><span>Asunto *</span><input name="title" required maxlength="80"></label>
-    <label class="f"><span>Mensaje *</span><textarea name="body" required></textarea></label>
-    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">${ic('send')} Enviar</button></div></form>`);
-  $('#fM', m).onsubmit = e => {
-    e.preventDefault(); const f = new FormData(e.target);
-    run(async () => {
-      const to = uid ? [uid] : S.team.filter(t => t.status === 'activo' && t.id !== S.me.id).map(t => t.id);
-      if (!to.length) throw new Error('No hay destinatarios.');
-      await q(sb.from('notifications').insert(to.map(id => ({group_id:S.me.group_id, user_id:id, type:'mensaje', title:f.get('title').trim(), body:f.get('body').trim()}))));
-      m.close(); toast(`Mensaje enviado a ${to.length} persona(s)`);
-    }, $('button[type=submit]', m));
-  };
-}
+ACT.msgOne = d => openChat(d.id);
+ACT.msgAll = () => openChat('group');
 
 /* =====================================================================
    Notificaciones y perfil
@@ -1027,7 +1131,7 @@ VIEWS.notificaciones = el => {
   el.innerHTML = `<div class="pagehead"><div class="grow"><div class="small muted">${unread()} sin leer</div></div>
     <button class="btn" data-act="readAll" ${unread() ? '' : 'disabled'}>${ic('check')} Marcar todas como leídas</button></div>
     ${S.notifs.length ? S.notifs.map(n => `<button class="notif ${n.read ? '' : 'unread'}" data-act="readOne" data-id="${n.id}">
-      <span style="color:var(--primary)">${ic({solicitud:'users', baja:'user', obsequio:'gift', agenda:'calendar', mensaje:'send'}[n.type] || 'bell')}</span>
+      <span style="color:var(--primary)">${ic({solicitud:'users', baja:'user', obsequio:'gift', agenda:'calendar', mensaje:'send', pago:'dollar', comision:'dollar', cargo:'user'}[n.type] || 'bell')}</span>
       <span style="flex:1"><b>${esc(n.title)}</b><div class="small">${esc(n.body || '')}</div><div class="small muted">${fDT(n.created_at)}</div></span></button>`).join('') : '<div class="card empty">No tienes notificaciones.</div>'}`;
 };
 ACT.readOne = d => run(async () => {
@@ -1038,22 +1142,40 @@ ACT.readAll = () => run(async () => {
   await q(sb.from('notifications').update({read:true}).eq('user_id', S.me.id).eq('read', false)); S.notifs.forEach(n => n.read = true); render();
 });
 VIEWS.perfil = el => {
-  const me = S.me, g = giftStats(me.id);
-  const mySales = S.sales.filter(s => s.seller_id === me.id);
+  const me = S.me, adm = isAdmin(), g = giftStats(me.id);
+  const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+  let rows;
+  if (adm) {
+    const total = sum(S.sales, s => s.amount), net = sum(S.sales, netOf), comm = sum(S.sales, s => s.commission_amount);
+    const sent = sum(S.assigns.filter(a => a.status === 'aceptado'), a => a.quantity), deliv = sum(S.deliveries, d => d.quantity);
+    rows = row('Cargo', `<span class="pill blue">${ROLES[me.role]}</span>`) + row('Grupo', esc(S.group?.name || '—'))
+      + row('Código del grupo', `<span class="code">${esc(S.group?.code || '')}</span>`)
+      + (S.sub?.paid_until ? row('Mensualidad', `${money(S.sub.price)} · vence el ${fDay(S.sub.paid_until)}`) : '')
+      + row('Vendedores activos', S.team.filter(t => t.status === 'activo' && t.role !== 'admin').length)
+      + row('Citas del grupo', S.appts.length)
+      + row('Ventas del grupo', `${S.sales.length} · ${money(total)}`)
+      + row('Ventas sin IVA (÷ 1,19)', money(net)) + row('IVA (19%)', money(total - net))
+      + row(`Mi comisión (${ADMIN_PCT}%)`, `<b>${money(net * ADMIN_PCT / 100)}</b>`)
+      + row('Comisiones de vendedores', money(comm))
+      + row('Referidos', S.refs.length)
+      + row('Obsequios', `${sent} aceptados · ${deliv} entregados`);
+  } else {
+    const mySales = S.sales.filter(s => s.seller_id === me.id);
+    rows = row('Cargo', `<span class="pill blue">${ROLES[me.role]}</span>`) + row('Grupo', esc(S.group?.name || '—'))
+      + row('Mi comisión', `<b>${me.commission_pct}%</b> de la venta sin IVA`)
+      + row('Ventas totales', `${mySales.length} · ${money(sum(mySales, s => s.amount))}`)
+      + row('Ventas sin IVA', money(sum(mySales, netOf)))
+      + row('Comisión acumulada', money(sum(mySales, s => s.commission_amount)))
+      + row('Obsequios disponibles', g.available);
+  }
   el.innerHTML = `<div class="grid cols2">
     <div class="card"><h2>Mi información</h2><form id="fP">
       <label class="f"><span>Nombre completo</span><input name="full_name" required value="${esc(me.full_name)}"></label>
       <div class="row2"><label class="f"><span>Teléfono</span><input name="phone" type="tel" value="${esc(me.phone)}"></label>
       <label class="f"><span>Correo</span><input value="${esc(me.email)}" disabled></label></div>
       <button class="btn primary" type="submit">Guardar cambios</button></form></div>
-    <div class="card"><h2>Mi cuenta</h2><dl class="kv">
-      <dt>Cargo</dt><dd><span class="pill blue">${ROLES[me.role]}</span></dd>
-      <dt>Grupo</dt><dd>${esc(S.group?.name || '—')}</dd>
-      ${isAdmin() ? `<dt>Código del grupo</dt><dd><span class="code">${esc(S.group?.code || '')}</span></dd>` : `<dt>Mi comisión</dt><dd><b>${me.commission_pct}%</b> de cada venta</dd>`}
-      <dt>Ventas totales</dt><dd>${mySales.length} · ${money(sum(mySales, s => s.amount))}</dd>
-      <dt>Comisión acumulada</dt><dd>${money(sum(mySales, s => s.commission_amount))}</dd>
-      <dt>Obsequios disponibles</dt><dd>${g.available}</dd></dl>
-      ${isAdmin() ? '' : me.delete_requested ? '<div class="pill warn">Solicitud de eliminación enviada, esperando al administrador</div>'
+    <div class="card"><h2>Mi cuenta</h2><dl class="kv">${rows}</dl>
+      ${adm ? `<p class="hint">Mi comisión = ${ADMIN_PCT}% de las ventas del grupo sin IVA (venta ÷ 1,19).</p>` : me.delete_requested ? '<div class="pill warn">Solicitud de eliminación enviada, esperando al administrador</div>'
         : '<button class="btn danger" data-act="reqDelete">Solicitar eliminar mi cuenta</button>'}</div></div>`;
   $('#fP').onsubmit = e => {
     e.preventDefault(); const f = new FormData(e.target);
@@ -1064,6 +1186,243 @@ ACT.reqDelete = async () => {
   if (!await confirmDlg('Se enviará una solicitud al administrador para eliminar tu cuenta. ¿Continuar?', 'Enviar solicitud')) return;
   run(async () => { await q(sb.from('profiles').update({delete_requested:true}).eq('id', S.me.id)); toast('Solicitud enviada'); await loadAll(); render(); });
 };
+
+
+/* =====================================================================
+   Historiales del Resumen (solo lectura) y mensajes sobre un registro
+   ===================================================================== */
+const HIST = {
+  citas:{title:'Historial de citas', col:'Cliente', noun:'cita', ref:'appointment'},
+  ventas:{title:'Historial de ventas', col:'Cliente', noun:'venta', ref:'sale'},
+  referidos:{title:'Historial de referidos', col:'Referido', noun:'referido', ref:'referral'},
+  obsequios:{title:'Historial de obsequios', col:'Entregado a', noun:'entrega de obsequio', ref:'delivery'}
+};
+function histItems(kind) {
+  const from = periodStart(S.period), to = periodEnd(S.period);
+  const inP = d => { const x = new Date(d); return x >= from && x < to; };
+  const byDate = (a, b) => new Date(b.date) - new Date(a.date);
+  let l = [];
+  if (kind === 'citas') l = S.appts.filter(a => inP(a.event_date)).map(a => ({id:a.id, seller:a.seller_id, date:a.event_date, name:a.client_name, sub:TYPES[a.type]}));
+  if (kind === 'ventas') l = S.sales.filter(s => inP(s.created_at)).map(s => ({id:s.id, seller:s.seller_id, date:s.created_at, name:apptOf(s.appointment_id)?.client_name || '—', sub:money(s.amount)}));
+  if (kind === 'referidos') l = S.refs.filter(r => inP(r.created_at)).map(r => ({id:r.id, seller:r.seller_id, date:r.created_at, name:r.name, sub:'de ' + (apptOf(r.appointment_id)?.client_name || '—')}));
+  if (kind === 'obsequios') l = S.deliveries.filter(d => inP(d.delivered_at || d.created_at)).map(d => ({id:d.id, seller:d.seller_id, date:d.delivered_at ? d.delivered_at + 'T12:00:00' : d.created_at, name:d.recipient_name, sub:`${d.quantity} × ${d.gift_name}`}));
+  return l.sort(byDate);
+}
+ACT.hist = d => histModal(d.k);
+function histModal(kind, keep) {
+  $$('.ov').forEach(o => o.close?.());
+  S.hist = keep ? {...S.hist, kind} : {kind, seller:''};
+  const m = modal(`${HIST[kind].title} · ${periodName()}`, '<div id="histBody"></div>', {wide:true});
+  histRender(m);
+}
+function histRender(m) {
+  const kind = S.hist.kind, all = histItems(kind), sel = S.hist.seller;
+  const items = all.filter(i => !sel || i.seller === sel);
+  const ids = [...new Set(all.map(i => i.seller).filter(Boolean))];
+  $('#histBody', m).innerHTML = `<div class="toolbar"><select id="hsel" aria-label="Vendedor"><option value="">Todos los vendedores</option>${ids.map(i => `<option value="${i}">${esc(person(i))}</option>`).join('')}</select><span class="muted small">${items.length} registro(s). Pulsa uno para ver el detalle.</span></div>
+    ${items.length ? `<div class="hist"><div class="hist-head"><span>Vendedor</span><span>Fecha</span><span>${HIST[kind].col}</span><span></span></div>
+    ${items.map(i => `<button type="button" class="hist-row" data-act="histOpen" data-k="${kind}" data-id="${i.id}"><span class="c1"><b>${esc(person(i.seller))}</b></span><span class="c2 small">${fDate(i.date)}</span><span class="c3">${esc(i.name)} <span class="small muted">· ${esc(i.sub)}</span></span><span class="chev">${ic('right')}</span></button>`).join('')}</div>` : '<div class="empty">No hay registros en este periodo.</div>'}`;
+  const hs = $('#hsel', m); hs.value = sel; hs.onchange = e => { S.hist.seller = e.target.value; histRender(m); };
+}
+ACT.histOpen = d => histDetail(d.k, d.id, true);
+ACT.histBack = d => histModal(d.k, true);
+function histDetail(kind, id, fromList) {
+  const kv = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`, H = HIST[kind];
+  let rows = '', seller = null, title = '', extra = '';
+  const seeAppt = aid => aid && apptOf(aid) ? `<button class="btn" data-act="openAppt" data-id="${aid}">${ic('calendar')} Ver cita</button>` : '';
+  if (kind === 'citas') {
+    const a = apptOf(id); if (!a) return null;
+    const sale = saleOf(a.id), dl = S.deliveries.filter(x => x.appointment_id === a.id);
+    seller = a.seller_id; title = 'Detalle de la cita';
+    rows = kv('Cliente', `<b>${esc(a.client_name)}</b>`) + kv('Fecha', fDT(a.event_date)) + kv('Dirección', esc(a.address || '—')) + kv('Teléfono', esc(a.phone || '—'))
+      + kv('Tipo', TYPES[a.type]) + kv('Estado', `<span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>`)
+      + kv('Vendedor', esc(person(a.seller_id))) + kv('Creada por', esc(person(a.created_by))) + (a.notes ? kv('Notas', esc(a.notes)) : '')
+      + (sale ? kv('Venta', `${money(sale.amount)} · comisión ${money(sale.commission_amount)}`) : '')
+      + kv('Referidos', S.refs.filter(r => r.appointment_id === a.id).length) + kv('Obsequios entregados', sum(dl, x => x.quantity));
+    extra = seeAppt(a.id).replace('Ver cita', 'Abrir cita completa');
+  } else if (kind === 'ventas') {
+    const v = S.sales.find(x => x.id === id); if (!v) return null;
+    const a = apptOf(v.appointment_id), net = netOf(v);
+    seller = v.seller_id; title = 'Detalle de la venta';
+    rows = kv('Cliente', `<b>${esc(a?.client_name || '—')}</b>`) + kv('Tipo de cita', a ? TYPES[a.type] : '—') + kv('Fecha de la venta', fDT(v.created_at))
+      + kv('Vendedor', esc(person(v.seller_id))) + kv('Valor de la venta', `<b>${money(v.amount)}</b>`)
+      + kv('Sin IVA (÷ 1,19)', money(net)) + kv('IVA (19%)', money(Number(v.amount) - net))
+      + kv(`Comisión del vendedor (${v.commission_pct}%)`, money(v.commission_amount))
+      + (isAdmin() ? kv(`Comisión del administrador (${ADMIN_PCT}%)`, money(net * ADMIN_PCT / 100)) : '')
+      + (v.notes ? kv('Observaciones', esc(v.notes)) : '');
+    extra = seeAppt(v.appointment_id);
+  } else if (kind === 'referidos') {
+    const r = S.refs.find(x => x.id === id); if (!r) return null;
+    seller = r.seller_id; title = 'Detalle del referido';
+    rows = kv('Referido', `<b>${esc(r.name)}</b>`) + kv('Teléfono', esc(r.phone || '—')) + kv('Dirección', esc(r.address || '—'))
+      + (r.notes ? kv('Observaciones', esc(r.notes)) : '') + kv('Referido por (cliente)', esc(apptOf(r.appointment_id)?.client_name || '—'))
+      + kv('Vendedor', esc(person(r.seller_id))) + kv('Fecha', fDT(r.created_at));
+    extra = seeAppt(r.appointment_id);
+  } else {
+    const d = S.deliveries.find(x => x.id === id); if (!d) return null;
+    seller = d.seller_id; title = 'Detalle de la entrega';
+    rows = kv('Obsequio', `<b>${esc(d.gift_name)}</b>`) + kv('Cantidad', d.quantity) + kv('Entregado a', esc(d.recipient_name)) + kv('Contacto', esc(d.recipient_contact || '—'))
+      + kv('Motivo', esc(d.reason)) + kv('Fecha de entrega', fDay(d.delivered_at || d.created_at)) + kv('Vendedor', esc(person(d.seller_id)));
+    extra = seeAppt(d.appointment_id);
+  }
+  const canMsg = seller && seller !== S.me.id && S.members.some(x => x.id === seller);
+  $$('.ov').forEach(o => o.close?.());
+  return modal(title, `<dl class="kv">${rows}</dl>${extra ? `<div class="actions" style="margin-bottom:6px">${extra}</div>` : ''}
+    ${canMsg ? `<div class="card" style="margin-top:12px"><h3 style="margin-bottom:8px">Enviar mensaje a ${esc(person(seller))}</h3>
+      <textarea id="hmsg" maxlength="2000" placeholder="Pregunta o comentario sobre esta ${H.noun}…" aria-label="Mensaje"></textarea>
+      <div class="actions" style="margin-top:8px"><button class="btn primary" data-act="histSend" data-k="${kind}" data-id="${id}" data-seller="${seller}">${ic('send')} Enviar</button>
+      <button class="btn" data-act="openChatWith" data-id="${seller}">${ic('chat')} Ir al chat</button></div>
+      <p class="hint" style="margin:8px 0 0">Llega al chat de ${esc(person(seller))} con esta ${H.noun} adjunta.</p></div>` : ''}
+    ${fromList ? `<div class="mf" style="justify-content:flex-start;margin-top:14px"><button class="btn" data-act="histBack" data-k="${kind}">${ic('left')} Volver al historial</button></div>` : ''}`, {wide:true});
+}
+ACT.histSend = (d, b) => {
+  const ta = $('#hmsg'), body = ta.value.trim();
+  if (!body) return toast('Escribe el mensaje.', true);
+  run(async () => {
+    const m = await q(sb.from('messages').insert({group_id:S.me.group_id, sender_id:S.me.id, recipient_id:d.seller, body, ref_type:HIST[d.k].ref, ref_id:d.id}).select().single());
+    onNewMsg(m); ta.value = ''; toast(`Mensaje enviado a ${person(d.seller)}`);
+  }, b);
+};
+ACT.openChatWith = d => { $$('.ov').forEach(o => o.close?.()); openChat(d.id); };
+ACT.openRef = d => {
+  const r = d.t === 'appointment' ? apptDetail(d.id) : histDetail({sale:'ventas', referral:'referidos', delivery:'obsequios'}[d.t], d.id, false);
+  if (!r) toast('Este elemento ya no está disponible para ti.', true);
+};
+
+/* =====================================================================
+   Chats (estilo WhatsApp): uno a uno y chat general del grupo
+   ===================================================================== */
+const convKey = m => m.recipient_id == null ? 'group' : (m.sender_id === S.me.id ? m.recipient_id : (m.sender_id || 'x'));
+const lastRead = key => { const r = S.reads.find(x => x.user_id === S.me.id && x.chat_key === key); return r ? new Date(r.last_read_at).getTime() : 0; };
+const unreadFor = key => S.msgs.filter(m => convKey(m) === key && m.sender_id !== S.me.id && new Date(m.created_at).getTime() > lastRead(key)).length;
+const unreadChats = () => { let n = 0; ['group', ...S.members.map(m => m.id)].forEach(k => { n += unreadFor(k); }); return n; };
+const peerRead = m => { const r = S.reads.find(x => x.user_id === m.recipient_id && x.chat_key === S.me.id); return !!r && new Date(r.last_read_at).getTime() >= new Date(m.created_at).getTime(); };
+const initials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const chatTime = d => { const x = new Date(d), now = new Date(), y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  return sameDay(x, now) ? fTime(x) : sameDay(x, y) ? 'Ayer' : x.toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit'}); };
+const dayLabel = d => { const x = new Date(d), now = new Date(), y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  return sameDay(x, now) ? 'Hoy' : sameDay(x, y) ? 'Ayer' : x.toLocaleDateString('es-CO', {weekday:'long', day:'numeric', month:'long'}); };
+
+function convs() {
+  const list = [{key:'group', name:`Grupo · ${S.group?.name || ''}`, grp:true}];
+  S.members.filter(m => m.id !== S.me.id).forEach(m => list.push({key:m.id, name:m.full_name, role:m.role}));
+  list.forEach(c => { const ms = S.msgs.filter(m => convKey(m) === c.key); c.last = ms[ms.length - 1]; c.unread = unreadFor(c.key); });
+  const t = c => c.last ? new Date(c.last.created_at).getTime() : 0;
+  return list.sort((a, b) => (t(b) - t(a)) || a.name.localeCompare(b.name));
+}
+VIEWS.chat = el => {
+  S.chat.rendered = null;
+  el.innerHTML = `<div class="chat ${S.chat.peer ? 'open-pane' : ''}" id="chat">
+    <aside class="clist"><div class="search"><input type="search" id="cq" placeholder="Buscar conversación" aria-label="Buscar conversación" value="${esc(S.chat.q)}"></div><div class="items" id="citems"></div></aside>
+    <section class="cpane" id="cpane"></section></div>`;
+  $('#cq').oninput = e => { S.chat.q = e.target.value; chatList(); };
+  chatList(); chatPane();
+};
+function chatList() {
+  const box = $('#citems'); if (!box) return;
+  const t = S.chat.q.trim().toLowerCase();
+  const items = convs().filter(c => !t || c.name.toLowerCase().includes(t));
+  box.innerHTML = items.map(c => {
+    const pre = !c.last ? '' : c.last.sender_id === S.me.id ? 'Tú: ' : (c.grp ? esc(person(c.last.sender_id).split(' ')[0]) + ': ' : '');
+    return `<button type="button" class="citem ${S.chat.peer === c.key ? 'on' : ''}" data-act="openConv" data-key="${c.key}">
+      <span class="av ${c.grp ? 'grp' : ''}">${c.grp ? ic('users') : esc(initials(c.name))}</span>
+      <span class="meta"><span class="nm"><span>${esc(c.name)}</span><span class="small muted" style="font-weight:400">${c.last ? chatTime(c.last.created_at) : ''}</span></span>
+      <span class="pv"><span class="tx">${c.last ? pre + esc(c.last.body) : (c.role ? ROLES[c.role] : 'Chat general del grupo')}</span>${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</span></span></button>`;
+  }).join('') || '<div class="empty">Sin resultados</div>';
+}
+function chatPane() {
+  const pane = $('#cpane'); if (!pane) return;
+  const key = S.chat.peer, c = key && convs().find(x => x.key === key);
+  if (!c) {
+    S.chat.peer = null; S.chat.rendered = null;
+    pane.innerHTML = `<div class="cempty"><div>${ic('chat')}<h2 style="margin:8px 0">Tus chats</h2><div>Elige una conversación para empezar a escribir.</div></div></div>`;
+    return;
+  }
+  if (S.chat.rendered !== key) {
+    pane.innerHTML = `<div class="chead"><button type="button" class="btn icon sm back" data-act="chatBack" aria-label="Volver a la lista">${ic('left')}</button>
+      <span class="av ${c.grp ? 'grp' : ''}">${c.grp ? ic('users') : esc(initials(c.name))}</span>
+      <div><b>${esc(c.name)}</b><div class="small muted">${c.grp ? `${S.members.length} participantes` : ROLES[c.role]}</div></div></div>
+      <div class="cmsgs" id="cmsgs"></div>
+      <form class="compose" id="cform"><textarea id="ctext" rows="1" maxlength="2000" placeholder="Escribe un mensaje" aria-label="Mensaje"></textarea>
+      <button class="btn primary icon" type="submit" aria-label="Enviar">${ic('send')}</button></form>`;
+    S.chat.rendered = key;
+    const ta = $('#ctext');
+    ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#cform').requestSubmit(); } };
+    ta.oninput = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 130) + 'px'; };
+    $('#cform').onsubmit = e => { e.preventDefault(); sendMsg(); };
+    chatMsgs(true);
+    if (window.matchMedia('(min-width:901px)').matches) ta.focus();
+  } else chatMsgs();
+}
+function refCard(m) {
+  if (!m.ref_type) return '';
+  let t = 'Elemento no disponible', ico = 'calendar';
+  if (m.ref_type === 'appointment') { const a = apptOf(m.ref_id); if (a) t = `Cita · ${a.client_name} · ${fDate(a.event_date)}`; }
+  else if (m.ref_type === 'sale') { const v = S.sales.find(x => x.id === m.ref_id); if (v) { ico = 'dollar'; t = `Venta · ${apptOf(v.appointment_id)?.client_name || 'cliente'} · ${money(v.amount)}`; } }
+  else if (m.ref_type === 'referral') { const r = S.refs.find(x => x.id === m.ref_id); if (r) { ico = 'share'; t = `Referido · ${r.name}`; } }
+  else if (m.ref_type === 'delivery') { const d = S.deliveries.find(x => x.id === m.ref_id); if (d) { ico = 'gift'; t = `Obsequio · ${d.quantity} × ${d.gift_name} · ${d.recipient_name}`; } }
+  return `<button type="button" class="refc" data-act="openRef" data-t="${esc(m.ref_type)}" data-id="${esc(m.ref_id)}"><span class="small" style="color:var(--primary-dark);font-weight:600;display:flex;gap:6px;align-items:center">${ic(ico)}${esc(t)}</span></button>`;
+}
+function chatMsgs(force) {
+  const box = $('#cmsgs'); if (!box) return;
+  const key = S.chat.peer, grp = key === 'group';
+  const st = box.scrollTop, atBottom = force || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  let lastDay = '', h = '';
+  S.msgs.filter(m => convKey(m) === key).forEach(m => {
+    const day = new Date(m.created_at).toDateString();
+    if (day !== lastDay) { lastDay = day; h += `<div class="day-sep">${esc(dayLabel(m.created_at))}</div>`; }
+    const mine = m.sender_id === S.me.id, rd = mine && !grp && peerRead(m);
+    h += `<div class="bub ${mine ? 'me' : ''}">${grp && !mine ? `<div class="who">${esc(person(m.sender_id))}</div>` : ''}${refCard(m)}${esc(m.body)}<div class="tm">${fTime(m.created_at)}${mine && !grp ? `<span class="tick ${rd ? 'read' : ''}" aria-label="${rd ? 'Leído' : 'Enviado'}">${rd ? '✓✓' : '✓'}</span>` : ''}</div></div>`;
+  });
+  box.innerHTML = h || '<div class="cempty">Aún no hay mensajes. Escribe el primero.</div>';
+  box.scrollTop = atBottom ? box.scrollHeight : st;
+  markRead(key);
+  chatList();
+}
+async function markRead(key) {
+  const ms = S.msgs.filter(m => convKey(m) === key);
+  if (!ms.length || S.view !== 'chat' || S.chat.peer !== key) return;
+  const last = ms[ms.length - 1].created_at;
+  if (lastRead(key) >= new Date(last).getTime()) return;
+  const row = {user_id:S.me.id, chat_key:key, last_read_at:last};
+  const i = S.reads.findIndex(x => x.user_id === S.me.id && x.chat_key === key);
+  if (i >= 0) S.reads[i] = row; else S.reads.push(row);
+  updateBell();
+  try { await q(sb.from('chat_reads').upsert(row, {onConflict:'user_id,chat_key'})); } catch (e) { console.warn(e); }
+}
+async function sendMsg() {
+  const ta = $('#ctext'), body = ta.value.trim(), key = S.chat.peer;
+  if (!body || !key) return;
+  ta.value = ''; ta.style.height = 'auto';
+  try {
+    const m = await q(sb.from('messages').insert({group_id:S.me.group_id, sender_id:S.me.id, recipient_id:key === 'group' ? null : key, body}).select().single());
+    onNewMsg(m); chatMsgs(true);
+  } catch (e) { ta.value = body; toast(e.message || 'No se pudo enviar', true); }
+}
+function onNewMsg(m) {
+  if (!S.me || S.msgs.some(x => x.id === m.id)) return;
+  S.msgs.push(m);
+  const key = convKey(m), mine = m.sender_id === S.me.id, open = S.view === 'chat' && S.chat.peer === key;
+  if (S.view === 'chat') { if ($('#cmsgs')) chatMsgs(mine); else chatList(); }
+  if (!mine && !open) toast(`Mensaje de ${person(m.sender_id)}: ${m.body.slice(0, 60)}`);
+  updateBell();
+}
+async function refreshMsgs() {
+  const last = S.msgs.length ? S.msgs[S.msgs.length - 1].created_at : null;
+  let qy = sb.from('messages').select('*').order('created_at', {ascending:true}).limit(200);
+  if (last) qy = qy.gt('created_at', last);
+  const before = JSON.stringify(S.reads);
+  const [fresh, reads] = await Promise.all([q(qy), q(sb.from('chat_reads').select('*'))]);
+  S.reads = reads;
+  fresh.forEach(onNewMsg);
+  if (!fresh.length && JSON.stringify(S.reads) !== before && S.view === 'chat') chatMsgs();
+}
+function openChat(peer) { S.chat.peer = peer; S.chat.rendered = null; go('chat'); }
+ACT.openConv = d => {
+  S.chat.peer = d.key; S.chat.rendered = null;
+  $('#chat')?.classList.add('open-pane'); chatPane(); chatList();
+};
+ACT.chatBack = () => { S.chat.peer = null; S.chat.rendered = null; $('#chat')?.classList.remove('open-pane'); chatPane(); chatList(); };
 
 </script>
 </body>
