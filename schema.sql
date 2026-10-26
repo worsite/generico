@@ -28,9 +28,28 @@ create table if not exists public.profiles (
   status           text not null default 'pendiente' check (status in ('pendiente','activo')),
   commission_pct   numeric(5,2) not null default 18 check (commission_pct >= 0 and commission_pct <= 100),
   delete_requested boolean not null default false,
+  avatar_url         text,
+  pending_avatar_url text,
   created_at       timestamptz not null default now()
 );
 alter table public.profiles alter column commission_pct set default 18;
+alter table public.profiles add column if not exists avatar_url text;
+alter table public.profiles add column if not exists pending_avatar_url text;
+alter table public.groups   add column if not exists photo_url text;
+
+-- Las fotos solo pueden venir del bucket "avatars" de este proyecto
+do $$ begin
+  alter table public.profiles add constraint profiles_avatar_chk
+    check (avatar_url is null or avatar_url like '%/storage/v1/object/public/avatars/%');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.profiles add constraint profiles_pending_avatar_chk
+    check (pending_avatar_url is null or pending_avatar_url like '%/storage/v1/object/public/avatars/%');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.groups add constraint groups_photo_chk
+    check (photo_url is null or photo_url like '%/storage/v1/object/public/avatars/%');
+exception when duplicate_object then null; end $$;
 create index if not exists profiles_group_idx on public.profiles(group_id);
 
 create table if not exists public.appointments (
@@ -309,11 +328,26 @@ begin
       insert into public.notifications(group_id, user_id, type, title, body)
         values (old.group_id, old.id, 'solicitud', 'Solicitud aceptada', 'Ya haces parte del grupo. Bienvenido.');
     end if;
+    -- aprobacion o rechazo de la foto de perfil de un emprendedor
+    if old.id <> auth.uid() and old.pending_avatar_url is not null and new.pending_avatar_url is null then
+      if new.avatar_url is not distinct from old.pending_avatar_url then
+        insert into public.notifications(group_id, user_id, type, title, body)
+          values (old.group_id, old.id, 'foto', 'Foto aprobada', 'Tu nueva foto de perfil ya es visible para tu equipo.');
+      else
+        insert into public.notifications(group_id, user_id, type, title, body)
+          values (old.group_id, old.id, 'foto', 'Foto rechazada', 'El administrador no aprobo tu foto de perfil. Puedes subir otra.');
+      end if;
+    end if;
     return new;
   elsif old.id = auth.uid() then
     -- el propio usuario: solo nombre, telefono y solicitud de baja
     new.role := old.role; new.status := old.status; new.commission_pct := old.commission_pct;
     new.group_id := old.group_id; new.email := old.email; new.id := old.id;
+    new.avatar_url := old.avatar_url;      -- la foto visible solo la cambia el admin al aprobar
+    if new.pending_avatar_url is not null and new.pending_avatar_url is distinct from old.pending_avatar_url then
+      perform public.notify_managers(old.group_id, 'foto', 'Foto de perfil por aprobar',
+        old.full_name || ' subio una nueva foto de perfil.');
+    end if;
     if new.delete_requested and not old.delete_requested then
       perform public.notify_managers(old.group_id, 'baja', 'Solicitud de eliminar cuenta',
         old.full_name || ' pidio eliminar su cuenta.');
@@ -404,7 +438,7 @@ begin
   elsif old.status = 'pendiente' and new.status in ('aceptado','rechazado') then
     select full_name into v_name from public.profiles where id = new.seller_id;
     perform public.notify_managers(new.group_id, 'obsequio',
-      'Obsequios ' || new.status, coalesce(v_name,'Un vendedor') || ' ' ||
+      'Obsequios ' || new.status, coalesce(v_name,'Un emprendedor') || ' ' ||
       case when new.status = 'aceptado' then 'acepto' else 'rechazo' end || ' ' || new.quantity || ' x ' || new.gift_name || '.');
   end if;
   return new;
@@ -610,10 +644,11 @@ create policy owner_select on public.platform_owner for select to authenticated
 -- ---------- Funciones para la app -----------------------------------------
 
 -- Miembros activos de mi grupo (nombre y cargo), para chats y asignaciones
+drop function if exists public.group_members();
 create or replace function public.group_members()
-returns table(id uuid, full_name text, role text)
+returns table(id uuid, full_name text, role text, avatar_url text)
 language sql stable security definer set search_path = public as $$
-  select p.id, p.full_name, p.role from public.profiles p
+  select p.id, p.full_name, p.role, p.avatar_url from public.profiles p
   where p.group_id = public.my_group() and p.status = 'activo'
   order by p.full_name
 $$;
@@ -743,6 +778,24 @@ insert into public.subscriptions(group_id, paid_until)
 alter table public.sales disable trigger sales_set_commission;
 update public.sales set net_amount = round(amount / 1.19, 2) where net_amount is null;
 alter table public.sales enable trigger sales_set_commission;
+
+-- fotos de perfil: bucket publico "avatars"; cada usuario solo sube dentro de su carpeta
+insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true)
+  on conflict (id) do update set public = true;
+do $$ begin
+  update storage.buckets set file_size_limit = 1048576,
+    allowed_mime_types = array['image/jpeg','image/png','image/webp'] where id = 'avatars';
+exception when others then null;
+end $$;
+drop policy if exists avatars_insert on storage.objects;
+create policy avatars_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists avatars_update on storage.objects;
+create policy avatars_update on storage.objects for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists avatars_delete on storage.objects;
+create policy avatars_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- tiempo real para los chats (si la publicacion no existe, se ignora)
 do $$ begin
