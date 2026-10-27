@@ -131,8 +131,8 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .cal .day .n{font-size:12.5px;font-weight:600;width:24px;height:24px;display:grid;place-items:center;border-radius:50%}
 .cal .day.today .n{background:var(--primary);color:#fff}
 .cal.week .day{min-height:260px}
-.chip{display:block;width:100%;text-align:left;border:0;border-radius:5px;padding:2px 6px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,var(--c,#2563EB) 16%,#fff);color:var(--fg);border-left:3px solid var(--c,#2563EB)}
-.chip.venta{font-weight:600}
+.chip{display:block;width:100%;text-align:left;border:0;border-radius:5px;padding:2px 6px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--c,#2563EB);color:var(--t,#fff);border-left:3px solid color-mix(in srgb,var(--c,#2563EB) 70%,#000);font-weight:500}
+.chip.venta{font-weight:700}
 .chip.cancelada{text-decoration:line-through;opacity:.6}
 .legend{display:flex;gap:6px 14px;flex-wrap:wrap;margin:0 0 12px;font-size:13px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
@@ -140,6 +140,7 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .more{font-size:12px;color:var(--muted);padding:0 4px}
 .dayview{display:grid;gap:10px}
 .appt{display:grid;grid-template-columns:70px 1fr auto;gap:12px;align-items:center;border:1px solid var(--border);border-left:5px solid var(--c,var(--primary));border-radius:var(--radius);background:#fff;padding:12px 14px;cursor:pointer;text-align:left;width:100%}
+.appt{background:color-mix(in srgb,var(--c,#2563EB) 12%,#fff)}
 .appt.cancelada{opacity:.7}
 .appt .t{font-family:var(--mono);font-weight:600}
 
@@ -397,6 +398,8 @@ const PALETTE = ['#2563EB', '#059669', '#D97706', '#7C3AED', '#DB2777', '#0891B2
 const safeColor = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c : '';
 const hashStr = t => [...String(t || '')].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 // Color del emprendedor en la agenda: el que asigna el admin; si no hay, uno automatico y estable
+const textOn = hex => { const h = safeColor(hex).slice(1) || '2563EB', [r, g, b] = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16));
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#0F172A' : '#FFFFFF'; };   // texto oscuro sobre colores claros
 const colorOf = id => {
   if (id === S.me?.id && safeColor(S.me.color)) return S.me.color;
   const m = S.members.find(x => x.id === id) || S.team.find(x => x.id === id);
@@ -875,7 +878,7 @@ function agBody() {
   $$('.seg [data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
   const ttl = $('#calTtl');
   const byDay = day => list.filter(a => sameDay(a.event_date, day)).sort((x, y) => new Date(x.event_date) - new Date(y.event_date));
-  const chip = a => `<span class="chip ${a.status}" style="--c:${colorOf(a.seller_id)}" role="button" tabindex="0" data-act="openAppt" data-id="${a.id}" title="${esc(a.client_name)}${a.completed_at ? ' (completada)' : ''}">${a.completed_at ? '✓ ' : ''}${fTime(a.event_date)} ${esc(a.client_name)}</span>`;
+  const chip = a => `<span class="chip ${a.status}" style="--c:${colorOf(a.seller_id)};--t:${textOn(colorOf(a.seller_id))}" role="button" tabindex="0" data-act="openAppt" data-id="${a.id}" title="${esc(a.client_name)}${a.completed_at ? ' (completada)' : ''}">${a.completed_at ? '✓ ' : ''}${fTime(a.event_date)} ${esc(a.client_name)}</span>`;
   if (mode === 'mes') {
     ttl.textContent = d.toLocaleDateString('es-CO', {month:'long', year:'numeric'});
     const start = startOfWeek(new Date(d.getFullYear(), d.getMonth(), 1));
