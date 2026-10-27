@@ -259,25 +259,6 @@ section{padding:72px 0}
 .credit a:hover{color:var(--ember)}
 .credit img{width:52px;height:52px;margin:14px auto 0;opacity:.85}
 
-/* ================= CTA FINAL ================= */
-.final{padding:0 0 88px}
-.final .box{
-  position:relative;overflow:hidden;border-radius:28px;padding:56px 22px;text-align:center;isolation:isolate;
-  background:linear-gradient(135deg,#7d140d,var(--flame) 45%,#ff6a3c);
-}
-.final .box::before{
-  content:"";position:absolute;inset:0;z-index:-1;opacity:.5;
-  background:radial-gradient(circle at 20% 120%,#2a0508,transparent 55%),radial-gradient(circle at 90% -20%,#ffd08a,transparent 45%);
-}
-.final h2{font-family:var(--font-display);font-weight:900;text-transform:uppercase;line-height:1.08;font-size:clamp(26px,7.2vw,58px);text-wrap:balance}
-.final p{max-width:480px;margin:16px auto 28px;font-size:18px;color:#fff3ee}
-.final .acts{display:flex;flex-direction:column;gap:12px;align-items:center}
-@media(min-width:620px){.final .acts{flex-direction:row;justify-content:center}}
-.final .btn{width:min(100%,340px)}
-.final .btn-wa{background:#fff;color:#1b0507}
-.final .btn-ig{background:#1b0507;color:#fff}
-.final .btn-ig:hover{transform:translateY(-2px);box-shadow:0 12px 30px -8px rgba(0,0,0,.7)}
-
 footer{border-top:1px solid var(--line);padding:32px 0 calc(36px + var(--sb));color:var(--muted);font-size:14px}
 footer .wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
 footer a{color:var(--rose);font-weight:600;text-decoration:underline;text-underline-offset:4px;min-height:44px;display:inline-flex;align-items:center}
@@ -463,7 +444,6 @@ footer a{color:var(--rose);font-weight:600;text-decoration:underline;text-underl
     <nav class="links" aria-label="Principal">
       <a href="#coleccion">Colección</a>
       <a href="#ocultas">Prendas ocultas</a>
-      <a href="#contacto">Contacto</a>
     </nav>
     <button class="cart-btn" id="openCart" type="button" aria-label="Abrir carrito, 0 productos">
       <svg class="off" aria-hidden="true"><use href="#i-fire"/></svg>
@@ -529,24 +509,6 @@ footer a{color:var(--rose);font-weight:600;text-decoration:underline;text-underl
     </div>
   </div>
 
-  <section class="final" id="contacto" aria-labelledby="t-cta">
-    <div class="wrap">
-      <div class="box rv">
-        <h2 id="t-cta">¿Listo para encender tu estilo?</h2>
-        <p>Escríbenos por WhatsApp y te asesoramos con tallas, colores y envíos. Y síguenos en Instagram para enterarte primero de lo nuevo.</p>
-        <div class="acts">
-          <a class="btn btn-wa" id="waDirect" target="_blank" rel="noopener noreferrer" href="#">
-            <svg aria-hidden="true"><use href="#i-wa"/></svg>
-            Escribir por WhatsApp
-          </a>
-          <a class="btn btn-ig" href="https://www.instagram.com/switch_on729/" target="_blank" rel="noopener noreferrer">
-            <svg aria-hidden="true"><use href="#i-ig"/></svg>
-            Síguenos en Instagram
-          </a>
-        </div>
-      </div>
-    </div>
-  </section>
 </main>
 
 <footer>
@@ -717,7 +679,6 @@ footer a{color:var(--rose);font-weight:600;text-decoration:underline;text-underl
     return '<div class="ghost">'+art(g,'art-s')+'<span class="q">?</span></div>';
   }).join('');
   $('waHidden').href = waLink('¡Hola Switch On! 🔥 No encontré la prenda para mi estilo. Quiero ver sus prendas especiales ocultas.');
-  $('waDirect').href = waLink('¡Hola Switch On! 🔥 Quiero información sobre sus prendas.');
   $('kafel').href = 'https://wa.me/573113141020?text=' + encodeURIComponent('¡Hola KAFEL! 👋 Vengo del catálogo de Switch On y me encantaría tener un catálogo como ese para mi negocio. ¿Me cuentan cómo trabajan y cuánto costaría?');
 
   /* ========== ficha de producto ========== */
