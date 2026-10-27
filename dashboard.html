@@ -131,14 +131,16 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .cal .day .n{font-size:12.5px;font-weight:600;width:24px;height:24px;display:grid;place-items:center;border-radius:50%}
 .cal .day.today .n{background:var(--primary);color:#fff}
 .cal.week .day{min-height:260px}
-.chip{display:block;width:100%;text-align:left;border:0;border-radius:5px;padding:2px 6px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--primary-soft);color:var(--primary-dark);border-left:3px solid var(--primary)}
-.chip.venta{background:var(--accent-soft);color:#065F46;border-color:var(--accent)}
-.chip.sin_venta{background:var(--muted-bg);color:var(--muted);border-color:#94A3B8}
-.chip.cancelada{background:var(--danger-soft);color:#991B1B;border-color:var(--danger);text-decoration:line-through}
+.chip{display:block;width:100%;text-align:left;border:0;border-radius:5px;padding:2px 6px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,var(--c,#2563EB) 16%,#fff);color:var(--fg);border-left:3px solid var(--c,#2563EB)}
+.chip.venta{font-weight:600}
+.chip.cancelada{text-decoration:line-through;opacity:.6}
+.legend{display:flex;gap:6px 14px;flex-wrap:wrap;margin:0 0 12px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--c,#2563EB);flex:none;display:inline-block}
 .more{font-size:12px;color:var(--muted);padding:0 4px}
 .dayview{display:grid;gap:10px}
-.appt{display:grid;grid-template-columns:70px 1fr auto;gap:12px;align-items:center;border:1px solid var(--border);border-left:4px solid var(--primary);border-radius:var(--radius);background:#fff;padding:12px 14px;cursor:pointer;text-align:left;width:100%}
-.appt.venta{border-left-color:var(--accent)} .appt.sin_venta{border-left-color:#94A3B8} .appt.cancelada{border-left-color:var(--danger);opacity:.75}
+.appt{display:grid;grid-template-columns:70px 1fr auto;gap:12px;align-items:center;border:1px solid var(--border);border-left:5px solid var(--c,var(--primary));border-radius:var(--radius);background:#fff;padding:12px 14px;cursor:pointer;text-align:left;width:100%}
+.appt.cancelada{opacity:.7}
 .appt .t{font-family:var(--mono);font-weight:600}
 
 /* modal / toast */
@@ -206,6 +208,21 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .cempty{flex:1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
 .chat .back{display:none}
 .scrim{display:none}
+.ok{background:var(--accent-soft);color:#065F46;border-radius:8px;padding:9px 12px;font-size:13.5px;margin-bottom:12px}
+.linkbtn{border:0;background:none;color:var(--primary-dark);font-weight:500;padding:0;text-decoration:underline;cursor:pointer;text-align:left}
+.btn[aria-disabled=true]{opacity:.75;cursor:not-allowed;pointer-events:none}
+.done-banner{display:flex;gap:12px;align-items:center;background:var(--accent-soft);color:#065F46;border:1px solid #A7E3CB;border-radius:10px;padding:10px 14px;margin-bottom:12px}
+.done-banner .tick-c{width:38px;height:38px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none;animation:pop .45s ease-out}
+.done-banner .tick-c svg{width:22px;height:22px;stroke-width:3}
+@keyframes pop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.18)}100%{transform:scale(1);opacity:1}}
+.goal{margin-bottom:14px}
+.goal .gl{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+.bar{height:10px;border-radius:999px;background:var(--muted-bg);overflow:hidden}
+.bar span{display:block;height:100%;background:var(--primary);border-radius:999px;transition:width .4s}
+.bar.full span{background:var(--accent)}
+.emp-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.swatch{width:26px;height:26px;border:1px solid var(--border);border-radius:6px;padding:0;background:none;cursor:pointer}
+input[type=color].swatch{min-height:0;padding:1px}
 
 @media (max-width:900px){
   .app{grid-template-columns:1fr}
@@ -215,7 +232,7 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
   .top .burger{display:inline-flex}
   .top{padding:12px 16px} .content{padding:16px}
   .cal .day{min-height:78px}
-  .cal .chip{font-size:0;padding:0;height:6px;border-left-width:0;border-radius:3px}
+  .cal .chip{font-size:0;padding:0;height:6px;border-left-width:0;border-radius:3px;background:var(--c,#2563EB)}
   .cal.week{grid-template-columns:1fr}
   .cal.week .dow{display:none}
   .cal.week .day{min-height:0}
@@ -251,6 +268,14 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
    ===================================================================== */
 const SUPABASE_URL = 'https://qpsctrxhbhlbfmjopoti.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwc2N0cnhoYmhsYmZtam9wb3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3MTg4ODUsImV4cCI6MjEwODI5NDg4NX0.VXrePNtCRS6npBmg4aXsiJ-IY1fImYuGGncUVoOWfYE';
+// Enlaces que llegan por correo (recuperar contraseña). Se leen ANTES de crear el cliente.
+const URL_PARAMS = new URLSearchParams(location.hash.slice(1));
+const IS_RECOVERY = URL_PARAMS.get('type') === 'recovery';
+const LINK_ERROR = URL_PARAMS.get('error_code')
+  ? (URL_PARAMS.get('error_code') === 'otp_expired' ? 'El enlace venció o ya se usó. Pide uno nuevo con "¿Olvidaste tu contraseña?".'
+     : (URL_PARAMS.get('error_description') || 'El enlace no es válido.').replace(/\+/g, ' '))
+  : '';
+if (LINK_ERROR) history.replaceState(null, '', location.pathname + location.search);
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* Pie de pagina de Kafel Soluciones Digitales.
@@ -296,6 +321,8 @@ const ICONS = {
   send:'<path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/>', check:'<path d="M20 6 9 17l-5-5"/>',
   chart:'<path d="M3 3v18h18M7 14l4-4 4 4 5-6"/>',
   chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  calc:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
@@ -359,12 +386,22 @@ const S = {
   cal:{mode:'mes', date:new Date()},
   f:{seller:'', type:'', status:'', q:''},
   chat:{peer:null, q:'', rendered:null}, hist:{kind:null, seller:''}, rt:null, chatTimer:null,
+  recovery:IS_RECOVERY, authMsg:LINK_ERROR,
   period:'mes', sellerFilterSales:'', booted:null, poll:null
 };
 const isAdmin = () => S.me?.role === 'admin';
 const isMgr = () => ['admin', 'agendador'].includes(S.me?.role);   // gestionan todas las agendas
 const person = id => id === S.me?.id ? 'Tú' : (S.members.find(t => t.id === id)?.full_name || S.team.find(t => t.id === id)?.full_name || (id ? 'Otro usuario' : 'Usuario eliminado'));
 const sellers = () => S.members.length ? S.members : S.team.filter(t => t.status === 'activo');
+const PALETTE = ['#2563EB', '#059669', '#D97706', '#7C3AED', '#DB2777', '#0891B2', '#DC2626', '#65A30D', '#475569', '#EA580C'];
+const safeColor = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c : '';
+const hashStr = t => [...String(t || '')].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+// Color del emprendedor en la agenda: el que asigna el admin; si no hay, uno automatico y estable
+const colorOf = id => {
+  if (id === S.me?.id && safeColor(S.me.color)) return S.me.color;
+  const m = S.members.find(x => x.id === id) || S.team.find(x => x.id === id);
+  return safeColor(m?.color) || PALETTE[hashStr(id) % PALETTE.length];
+};
 const apptOf = id => S.appts.find(a => a.id === id);
 const saleOf = apptId => S.sales.find(s => s.appointment_id === apptId);
 const unread = () => S.notifs.filter(n => !n.read).length;
@@ -382,7 +419,7 @@ async function loadAll() {
     q(sb.from('messages').select('*').order('created_at', {ascending:false}).limit(1000)),
     q(sb.from('chat_reads').select('*'))
   ]);
-  Object.assign(S, {appts, sales, refs, assigns, deliveries, notifs, team, members, msgs:msgs.reverse(), reads});
+  Object.assign(S, {appts, sales, refs, assigns, deliveries, notifs, team, members:members || [], msgs:(msgs || []).reverse(), reads:reads || []});
   const mine = team.find(t => t.id === S.user.id);
   if (mine) S.me = mine;
   if (S.me?.role === 'admin') S.sub = await q(sb.rpc('my_subscription'));
@@ -413,12 +450,15 @@ function renderAuth(tab = 'login') {
     <div id="authBody"></div>${creditHtml()}</div></div>`;
   $$('[data-tab]').forEach(b => b.onclick = () => renderAuth(b.dataset.tab));
   tab === 'login' ? authLogin() : authSignup();
+  if (S.authMsg && $('#aErr')) { $('#aErr').innerHTML = `<div class="err">${esc(S.authMsg)}</div>`; S.authMsg = ''; }
 }
 function authLogin() {
   $('#authBody').innerHTML = `<form id="fLogin"><div id="aErr"></div>
     <label class="f"><span>Correo</span><input type="email" name="email" required autocomplete="email"></label>
     <label class="f"><span>Contraseña</span><input type="password" name="password" required autocomplete="current-password"></label>
-    <button class="btn primary" style="width:100%;justify-content:center" type="submit">Ingresar</button></form>`;
+    <button class="btn primary" style="width:100%;justify-content:center" type="submit">Ingresar</button>
+    <p style="text-align:center;margin:14px 0 0"><button type="button" class="linkbtn" id="bForgot">¿Olvidaste tu contraseña?</button></p></form>`;
+  $('#bForgot').onclick = authForgot;
   $('#fLogin').onsubmit = async e => {
     e.preventDefault();
     const f = new FormData(e.target), btn = $('button[type=submit]', e.target);
@@ -426,6 +466,49 @@ function authLogin() {
     const {error} = await sb.auth.signInWithPassword({email:f.get('email').trim(), password:f.get('password')});
     btn.disabled = false;
     if (error) $('#aErr').innerHTML = `<div class="err">${esc(error.message === 'Invalid login credentials' ? 'Correo o contraseña incorrectos.' : error.message)}</div>`;
+  };
+}
+function authForgot() {
+  $('#authBody').innerHTML = `<form id="fForgot"><div id="aErr"></div>
+    <p class="small muted" style="margin:0 0 12px">Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.</p>
+    <label class="f"><span>Correo</span><input type="email" name="email" required autocomplete="email"></label>
+    <button class="btn primary" style="width:100%;justify-content:center" type="submit">Enviar enlace</button>
+    <p style="text-align:center;margin:14px 0 0"><button type="button" class="linkbtn" id="bBack">Volver a ingresar</button></p></form>`;
+  $('#bBack').onclick = () => renderAuth('login');
+  $('#fForgot').onsubmit = async e => {
+    e.preventDefault();
+    const btn = $('button[type=submit]', e.target), email = new FormData(e.target).get('email').trim();
+    btn.disabled = true;
+    const redirectTo = location.protocol === 'file:' ? undefined : location.origin + location.pathname;
+    const {error} = await sb.auth.resetPasswordForEmail(email, redirectTo ? {redirectTo} : undefined);
+    btn.disabled = false;
+    if (error) {
+      const m = (error.message || '').toLowerCase();
+      $('#aErr').innerHTML = `<div class="err">${esc(m.includes('rate limit') ? 'Se enviaron demasiados correos seguidos. Espera unos minutos e inténtalo de nuevo.' : error.message)}</div>`;
+    } else {
+      $('#aErr').innerHTML = '<div class="ok">Si ese correo está registrado, recibirás un enlace en unos minutos. Revisa también la carpeta de spam.</div>';
+      btn.hidden = true;
+    }
+  };
+}
+function renderNewPassword() {
+  stopPoll();
+  $('#root').innerHTML = `<div class="auth"><div class="auth-card"><div class="brand"><span class="logo">${ic('chart')}</span>Control de Equipo</div>
+    <h2 style="margin-bottom:6px">Crea tu nueva contraseña</h2><p class="small muted" style="margin:0 0 14px">Escríbela dos veces. Al guardar entrarás directo a tu cuenta.</p>
+    <form id="fNew"><div id="aErr"></div>
+    <label class="f"><span>Nueva contraseña (mínimo 6 caracteres)</span><input type="password" name="p1" minlength="6" required autocomplete="new-password"></label>
+    <label class="f"><span>Repite la contraseña</span><input type="password" name="p2" minlength="6" required autocomplete="new-password"></label>
+    <button class="btn primary" style="width:100%;justify-content:center" type="submit">Guardar y entrar</button></form>${creditHtml()}</div></div>`;
+  $('#fNew').onsubmit = async e => {
+    e.preventDefault();
+    const f = new FormData(e.target), btn = $('button[type=submit]', e.target), err = m => $('#aErr').innerHTML = `<div class="err">${esc(m)}</div>`;
+    if (f.get('p1') !== f.get('p2')) return err('Las contraseñas no coinciden.');
+    btn.disabled = true;
+    const {error} = await sb.auth.updateUser({password:f.get('p1')});
+    btn.disabled = false;
+    if (error) return err(/different|same/i.test(error.message) ? 'La contraseña nueva debe ser distinta a la anterior.' : error.message);
+    S.recovery = false; history.replaceState(null, '', location.pathname + location.search);
+    toast('Contraseña actualizada'); S.booted = null; boot(true);
   };
 }
 function authSignup() {
@@ -539,6 +622,7 @@ function subscribeRealtime() {
 }
 
 sb.auth.onAuthStateChange((ev, session) => {
+  if (ev === 'PASSWORD_RECOVERY' || (S.recovery && session)) { S.recovery = true; setTimeout(renderNewPassword, 0); return; }
   if (ev === 'SIGNED_OUT') { S.booted = null; renderAuth(); }
   else if (session && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) setTimeout(() => boot(), 0);
   else if (ev === 'INITIAL_SESSION' && !session) renderAuth();
@@ -551,7 +635,7 @@ function navItems() {
   const adm = isAdmin();
   const base = [['resumen','Resumen','home'], ['agenda', isMgr() ? 'Agendas' : 'Mi agenda','calendar'], ['ventas', adm ? 'Ventas' : 'Mis ventas','dollar'], ['referidos','Referidos','share']];
   if (adm) base.push(['equipo','Equipo','users']);
-  base.push(['obsequios','Obsequios','gift'], ['chat','Chats','chat'], ['notificaciones','Notificaciones','bell'], ['perfil','Mi perfil','user']);
+  base.push(['obsequios','Obsequios','gift'], ['cotizador','Cotizador','calc'], ['chat','Chats','chat'], ['notificaciones','Notificaciones','bell'], ['perfil','Mi perfil','user']);
   return base;
 }
 function renderShell() {
@@ -706,6 +790,7 @@ VIEWS.resumen = el => {
       <select id="period" style="width:auto" aria-label="Periodo"><option value="mes">Este mes</option><option value="3m">Últimos 3 meses</option><option value="anio">Este año</option><option value="todo">Todo</option></select></div>
     <div class="grid kpis">
       ${k('Citas', ap.length, 'calendar', '', adm ? 'citas' : '')}
+      ${k('Citas completadas', ap.filter(a => a.completed_at).length, 'check')}
       ${S.me.role === 'agendador' ? k('Citas del grupo', groupAp, 'users', '', 'citas') : ''}
       ${k('Ventas', sa.length, 'check', 'g', adm ? 'ventas' : '')}
       ${k('Total vendido', money(total), 'dollar', 'b')}
@@ -715,6 +800,7 @@ VIEWS.resumen = el => {
       ${adm ? k('Obsequios entregados', sum(dl, d => d.quantity), 'gift', '', 'obsequios') : k('Obsequios disponibles', gifts.available, 'gift')}
       ${adm ? k('Emprendedores activos', S.team.filter(t => t.status === 'activo' && t.role !== 'admin').length, 'users') : ''}
     </div>
+    ${!adm && ['goal_week', 'goal_biweek', 'goal_month'].some(c => Number(S.me[c]) > 0) ? `<div class="card" style="margin-bottom:16px"><h2>Mis metas de ventas</h2>${goalBars(S.me)}</div>` : ''}
     ${adm && pendingCount() ? `<div class="card" style="margin-bottom:16px;border-color:#FCD34D;background:var(--warn-soft)"><b>${pendingCount()} solicitud(es) pendiente(s)</b> en Equipo. <button class="btn sm" data-go2="equipo" style="margin-left:8px">Revisar</button></div>` : ''}
     <div class="grid cols2">
       <div class="card"><h2>Ventas por mes</h2>${chartBox('cMonth', 'Ventas y comisiones por mes')}</div>
@@ -754,10 +840,10 @@ function filteredAppts() {
     && (!t || [a.client_name, a.address, a.phone, a.notes].some(v => (v || '').toLowerCase().includes(t))));
 }
 function apptCard(a) {
-  return `<button class="appt ${a.status}" data-act="openAppt" data-id="${a.id}">
+  return `<button class="appt ${a.status}" style="--c:${colorOf(a.seller_id)}" data-act="openAppt" data-id="${a.id}">
     <div class="t">${fTime(a.event_date)}<div class="small muted" style="font-family:var(--font)">${fDate(a.event_date)}</div></div>
     <div><b>${esc(a.client_name)}</b><div class="small muted">${esc(a.address || 'Sin dirección')}${isMgr() ? ' · ' + esc(person(a.seller_id)) : ''}</div></div>
-    <div><span class="pill blue">${TYPES[a.type]}</span> <span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span></div></button>`;
+    <div><span class="pill blue">${TYPES[a.type]}</span> <span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>${a.completed_at ? ' <span class="pill green">✓ Completada</span>' : ''}</div></button>`;
 }
 VIEWS.agenda = el => {
   el.innerHTML = `
@@ -769,6 +855,7 @@ VIEWS.agenda = el => {
       <select id="ft" aria-label="Tipo"><option value="">Todos los tipos</option>${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
       <select id="fst" aria-label="Estado"><option value="">Todos los estados</option>${Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
     </div>
+    ${isMgr() ? `<div class="legend" aria-label="Colores por emprendedor">${sellers().filter(p => p.role !== 'admin' || p.id === S.me.id).map(p => `<span><i class="dot" style="--c:${colorOf(p.id)}"></i>${esc(p.id === S.me.id ? 'Yo' : p.full_name)}</span>`).join('')}</div>` : ''}
     <div class="calhead">
       <button class="btn icon sm" data-act="calPrev" aria-label="Anterior">${ic('left')}</button>
       <button class="btn icon sm" data-act="calNext" aria-label="Siguiente">${ic('right')}</button>
@@ -788,7 +875,7 @@ function agBody() {
   $$('.seg [data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
   const ttl = $('#calTtl');
   const byDay = day => list.filter(a => sameDay(a.event_date, day)).sort((x, y) => new Date(x.event_date) - new Date(y.event_date));
-  const chip = a => `<span class="chip ${a.status}" role="button" tabindex="0" data-act="openAppt" data-id="${a.id}" title="${esc(a.client_name)}">${fTime(a.event_date)} ${esc(a.client_name)}</span>`;
+  const chip = a => `<span class="chip ${a.status}" style="--c:${colorOf(a.seller_id)}" role="button" tabindex="0" data-act="openAppt" data-id="${a.id}" title="${esc(a.client_name)}${a.completed_at ? ' (completada)' : ''}">${a.completed_at ? '✓ ' : ''}${fTime(a.event_date)} ${esc(a.client_name)}</span>`;
   if (mode === 'mes') {
     ttl.textContent = d.toLocaleDateString('es-CO', {month:'long', year:'numeric'});
     const start = startOfWeek(new Date(d.getFullYear(), d.getMonth(), 1));
@@ -818,7 +905,7 @@ function agBody() {
     ttl.textContent = `${list.length} cita(s)`;
     body.innerHTML = list.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Dirección</th><th>Tipo</th>${isMgr() ? '<th>Emprendedor</th><th>Creada por</th>' : ''}<th>Estado</th></tr></thead><tbody>
       ${list.map(a => `<tr class="click" data-act="openAppt" data-id="${a.id}"><td>${fDT(a.event_date)}</td><td><b>${esc(a.client_name)}</b><div class="small muted">${esc(a.phone || '')}</div></td><td>${esc(a.address || '—')}</td><td>${TYPES[a.type]}</td>
-      ${isMgr() ? `<td>${esc(person(a.seller_id))}</td><td>${esc(person(a.created_by))}</td>` : ''}<td><span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">No hay citas con esos filtros.</div>';
+      ${isMgr() ? `<td><span style="display:inline-flex;gap:6px;align-items:center"><i class="dot" style="--c:${colorOf(a.seller_id)}"></i>${esc(person(a.seller_id))}</span></td><td>${esc(person(a.created_by))}</td>` : ''}<td><span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>${a.completed_at ? ' <span class="pill green">✓</span>' : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">No hay citas con esos filtros.</div>';
   }
 }
 ACT.calMode = (d) => { S.cal.mode = d.m; agBody(); };
@@ -868,6 +955,7 @@ function apptDetail(id) {
   const sale = saleOf(a.id), refs = S.refs.filter(r => r.appointment_id === a.id), dels = S.deliveries.filter(x => x.appointment_id === a.id);
   const own = a.seller_id === S.me.id, canEdit = isMgr() || own, canWork = own || isAdmin();   // el agendador gestiona la agenda, pero no las ventas ajenas
   const m = modal('Detalle de la cita', `
+    ${a.completed_at ? `<div class="done-banner"><span class="tick-c">${ic('check')}</span><div><b>¡Cita completada!</b><div class="small">${fDT(a.completed_at)}${a.completed_by ? ' · ' + esc(person(a.completed_by)) : ''}</div></div></div>` : ''}
     <dl class="kv">
       <dt>Cliente</dt><dd><b>${esc(a.client_name)}</b></dd>
       <dt>Fecha</dt><dd>${fDT(a.event_date)}</dd>
@@ -888,6 +976,7 @@ function apptDetail(id) {
     ${refs.length ? `<div style="margin-bottom:12px"><b>Referidos (${refs.length})</b>${refs.map(r => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${esc(r.name)}</b> <span class="muted small">${esc(r.phone || '')}</span><div class="small muted">${esc(r.address || '')} ${r.notes ? '· ' + esc(r.notes) : ''}</div></div>`).join('')}</div>` : ''}
     ${dels.length ? `<div style="margin-bottom:12px"><b>Obsequios entregados (${sum(dels, x => x.quantity)})</b>${dels.map(x => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${x.quantity} × ${esc(x.gift_name)}</b> <span class="muted small">· ${fDay(x.delivered_at || x.created_at)}</span><div class="small muted">Para ${esc(x.recipient_name)} · ${esc(x.reason)}</div></div>`).join('')}</div>` : ''}
     ${canEdit ? `<div class="mf" style="justify-content:flex-start">
+      ${canWork && a.status !== 'cancelada' ? (a.completed_at ? `<button class="btn" data-act="undoDone" data-id="${a.id}">Quitar completada</button>` : `<button class="btn green" data-act="doneAppt" data-id="${a.id}">${ic('check')} Marcar completada</button>`) : ''}
       ${canWork && !sale ? `<button class="btn green" data-act="markSale" data-id="${a.id}">${ic('dollar')} Marcar venta</button>` : ''}
       ${canWork ? `<button class="btn" data-act="addRef" data-id="${a.id}">${ic('plus')} Referidos</button>` : ''}
       ${own ? `<button class="btn" data-act="newDelivery" data-appt="${a.id}">${ic('gift')} Obsequio entregado</button>` : ''}
@@ -898,6 +987,14 @@ function apptDetail(id) {
       <button class="btn danger" data-act="delAppt" data-id="${a.id}">${ic('trash')}</button></div>` : ''}`, {wide:true});
   return m;
 }
+ACT.doneAppt = d => run(async () => {
+  await q(sb.from('appointments').update({completed_at:new Date().toISOString()}).eq('id', d.id));
+  toast('¡Cita completada! Se avisó al administrador.'); await loadAll(); render(); apptDetail(d.id);
+});
+ACT.undoDone = d => run(async () => {
+  await q(sb.from('appointments').update({completed_at:null}).eq('id', d.id));
+  await loadAll(); render(); apptDetail(d.id);
+});
 ACT.editAppt = d => { $$('.ov').forEach(o => o.close?.()); apptForm(apptOf(d.id)); };
 ACT.delAppt = async d => {
   if (!await confirmDlg('¿Eliminar esta cita? También se borrarán su venta y sus referidos.', 'Eliminar')) return;
@@ -1131,14 +1228,18 @@ VIEWS.equipo = el => {
     ${isAdmin() && bajas.length ? `<div class="card" style="margin-bottom:16px;border-color:#F5C2C2"><h2>Solicitudes para eliminar cuenta (${bajas.length})</h2>
       ${bajas.map(p => `<div class="actions" style="align-items:center;padding:8px 0;border-top:1px solid var(--border)"><div style="flex:1;min-width:180px"><b>${esc(p.full_name)}</b><div class="small muted">Pidió eliminar su cuenta</div></div>
       <button class="btn danger sm" data-act="removeUser" data-id="${p.id}" data-quiet="1">Aprobar y eliminar</button><button class="btn sm" data-act="keepUser" data-id="${p.id}">Rechazar</button></div>`).join('')}</div>` : ''}
-    <div class="tw"><table><thead><tr><th>Nombre</th><th>Contacto</th><th>Cargo</th><th class="num">Comisión %</th><th class="num">Citas</th><th class="num">Ventas</th><th></th></tr></thead><tbody>
-    ${act.map(p => { const s = stat(p.id), me = p.id === S.me.id; return `<tr><td><div style="display:flex;gap:10px;align-items:center">${avatar(p.full_name, p.avatar_url, 'sm')}<div><b>${esc(p.full_name)}</b>${me ? ' <span class="pill blue">Tú</span>' : ''}</div></div></td><td class="small">${esc(p.email || '')}<div class="muted">${esc(p.phone || '')}</div></td>
+    <div class="tw"><table><thead><tr><th>Nombre</th><th>Contacto</th><th>Cargo</th><th>Color</th><th class="num">Comisión %</th><th class="num">Citas</th><th class="num">Ventas</th><th></th></tr></thead><tbody>
+    ${act.map(p => { const s = stat(p.id), me = p.id === S.me.id; return `<tr><td><div style="display:flex;gap:10px;align-items:center">${avatar(p.full_name, p.avatar_url, 'sm')}<div><button type="button" class="linkbtn" data-act="empOpen" data-id="${p.id}" title="Ver información de ${esc(p.full_name)}"><b>${esc(p.full_name)}</b></button>${me ? ' <span class="pill blue">Tú</span>' : ''}<div class="small muted">Ver información</div></div></div></td><td class="small">${esc(p.email || '')}<div class="muted">${esc(p.phone || '')}</div></td>
       <td>${isAdmin() && !me ? `<select data-role-for="${p.id}" aria-label="Cargo de ${esc(p.full_name)}" style="min-width:140px">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}" ${p.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select>` : ROLES[p.role]}</td>
+ <td>${p.role === 'admin' ? '—' : `<input type="color" class="swatch" value="${colorOf(p.id)}" data-color-for="${p.id}" aria-label="Color de ${esc(p.full_name)} en la agenda" title="Color en la agenda">`}</td>
       <td class="num">${isAdmin() ? `<input type="number" min="0" max="100" step="0.5" value="${p.commission_pct}" data-comm-for="${p.id}" aria-label="Comisión de ${esc(p.full_name)}" style="width:84px;text-align:right">` : p.commission_pct + '%'}</td>
       <td class="num">${s.c}</td><td class="num">${s.v}</td>
       <td><div class="actions">${me ? '' : `<button class="btn sm icon" data-act="msgOne" data-id="${p.id}" aria-label="Enviar mensaje">${ic('chat')}</button>`}${isAdmin() && !me ? `<button class="btn sm icon danger" data-act="removeUser" data-id="${p.id}" aria-label="Eliminar usuario">${ic('trash')}</button>` : ''}</div></td></tr>`; }).join('')}</tbody></table></div>`;
   $$('[data-role-for]', el).forEach(s => s.onchange = () => run(async () => {
     await q(sb.from('profiles').update({role:s.value}).eq('id', s.dataset.roleFor)); toast('Cargo actualizado'); await loadAll(); render();
+  }));
+  $$('[data-color-for]', el).forEach(i => i.onchange = () => run(async () => {
+    await q(sb.from('profiles').update({color:i.value}).eq('id', i.dataset.colorFor)); toast('Color asignado'); await loadAll(); render();
   }));
   $$('[data-comm-for]', el).forEach(i => i.onchange = () => run(async () => {
     const v = Math.min(100, Math.max(0, Number(i.value) || 0));
@@ -1166,7 +1267,7 @@ VIEWS.notificaciones = el => {
   el.innerHTML = `<div class="pagehead"><div class="grow"><div class="small muted">${unread()} sin leer</div></div>
     <button class="btn" data-act="readAll" ${unread() ? '' : 'disabled'}>${ic('check')} Marcar todas como leídas</button></div>
     ${S.notifs.length ? S.notifs.map(n => `<button class="notif ${n.read ? '' : 'unread'}" data-act="readOne" data-id="${n.id}">
-      <span style="color:var(--primary)">${ic({solicitud:'users', baja:'user', obsequio:'gift', agenda:'calendar', mensaje:'send', foto:'user', pago:'dollar', comision:'dollar', cargo:'user'}[n.type] || 'bell')}</span>
+      <span style="color:var(--primary)">${ic({solicitud:'users', baja:'user', obsequio:'gift', agenda:'calendar', mensaje:'send', completada:'check', foto:'user', pago:'dollar', comision:'dollar', cargo:'user'}[n.type] || 'bell')}</span>
       <span style="flex:1"><b>${esc(n.title)}</b><div class="small">${esc(n.body || '')}</div><div class="small muted">${fDT(n.created_at)}</div></span></button>`).join('') : '<div class="card empty">No tienes notificaciones.</div>'}`;
 };
 ACT.readOne = d => run(async () => {
@@ -1211,7 +1312,21 @@ VIEWS.perfil = el => {
       <button class="btn primary" type="submit">Guardar cambios</button></form></div>
     <div class="card"><h2>Mi cuenta</h2><dl class="kv">${rows}</dl>
       ${adm ? `<p class="hint">Mi comisión = ${ADMIN_PCT}% de las ventas del grupo sin IVA (venta ÷ 1,19).</p>` : me.delete_requested ? '<div class="pill warn">Solicitud de eliminación enviada, esperando al administrador</div>'
-        : '<button class="btn danger" data-act="reqDelete">Solicitar eliminar mi cuenta</button>'}</div></div>`;
+        : '<button class="btn danger" data-act="reqDelete">Solicitar eliminar mi cuenta</button>'}</div></div>
+    ${adm ? '' : `<div class="card" style="margin-top:16px"><h2>Mis metas de ventas</h2>
+      <p class="small muted" style="margin-top:0">Define cuánto quieres vender (valor total de tus ventas). Deja vacío el periodo que no quieras medir. Tu administrador también puede verlas.</p>
+      <form id="fGoals"><div class="row3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 12px">
+      <label class="f"><span>Meta semanal (COP)</span><input name="w" type="number" min="0" step="1000" value="${me.goal_week ?? ''}"></label>
+      <label class="f"><span>Meta quincenal (COP)</span><input name="b" type="number" min="0" step="1000" value="${me.goal_biweek ?? ''}"></label>
+      <label class="f"><span>Meta mensual (COP)</span><input name="m" type="number" min="0" step="1000" value="${me.goal_month ?? ''}"></label></div>
+      <button class="btn primary" type="submit">Guardar metas</button></form>
+      <div style="margin-top:16px">${goalBars(me)}</div>
+      <p class="hint" style="margin-top:6px">Tu color en la agenda: <i class="dot" style="--c:${colorOf(me.id)}"></i> lo asigna tu administrador.</p></div>`}`;
+  const gf = $('#fGoals');
+  if (gf) gf.onsubmit = e => {
+    e.preventDefault(); const f = new FormData(e.target), n = k => f.get(k) === '' ? null : Math.max(0, Number(f.get(k)) || 0);
+    run(async () => { await q(sb.from('profiles').update({goal_week:n('w'), goal_biweek:n('b'), goal_month:n('m')}).eq('id', me.id)); toast('Metas guardadas'); await loadAll(); render(); }, $('button[type=submit]', e.target));
+  };
   $('#photoIn').onchange = e => { const f = e.target.files[0]; e.target.value = ''; run(() => setPhoto(f)); };
   $('#fP').onsubmit = e => {
     e.preventDefault(); const f = new FormData(e.target);
@@ -1271,7 +1386,7 @@ function histDetail(kind, id, fromList) {
     const sale = saleOf(a.id), dl = S.deliveries.filter(x => x.appointment_id === a.id);
     seller = a.seller_id; title = 'Detalle de la cita';
     rows = kv('Cliente', `<b>${esc(a.client_name)}</b>`) + kv('Fecha', fDT(a.event_date)) + kv('Dirección', esc(a.address || '—')) + kv('Teléfono', esc(a.phone || '—'))
-      + kv('Tipo', TYPES[a.type]) + kv('Estado', `<span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>`)
+      + kv('Tipo', TYPES[a.type]) + kv('Estado', `<span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>${a.completed_at ? ' <span class="pill green">✓ Completada</span>' : ''}`)
       + kv('Emprendedor', esc(person(a.seller_id))) + kv('Creada por', esc(person(a.created_by))) + (a.notes ? kv('Notas', esc(a.notes)) : '')
       + (sale ? kv('Venta', `${money(sale.amount)} · comisión ${money(sale.commission_amount)}`) : '')
       + kv('Referidos', S.refs.filter(r => r.appointment_id === a.id).length) + kv('Obsequios entregados', sum(dl, x => x.quantity));
@@ -1509,6 +1624,71 @@ ACT.photoOk = d => run(async () => {
   toast('Foto aprobada'); await loadAll(); render();
 });
 ACT.photoNo = d => run(async () => { await q(sb.from('profiles').update({pending_avatar_url:null}).eq('id', d.id)); toast('Foto rechazada'); await loadAll(); render(); });
+
+/* =====================================================================
+   Metas personales y detalle de cada emprendedor (vista del admin)
+   ===================================================================== */
+function periodRanges(now = new Date()) {
+  const wk0 = startOfWeek(now), wk1 = new Date(wk0); wk1.setDate(wk1.getDate() + 7);
+  const y = now.getFullYear(), m = now.getMonth(), first = now.getDate() <= 15;
+  return {
+    week:[wk0, wk1, 'Semanal', `${wk0.toLocaleDateString('es-CO', {day:'numeric', month:'short'})} – ${new Date(wk1 - 864e5).toLocaleDateString('es-CO', {day:'numeric', month:'short'})}`],
+    biweek:[new Date(y, m, first ? 1 : 16), first ? new Date(y, m, 16) : new Date(y, m + 1, 1), 'Quincenal', first ? '1 al 15' : `16 al ${new Date(y, m + 1, 0).getDate()}`],
+    month:[new Date(y, m, 1), new Date(y, m + 1, 1), 'Mensual', now.toLocaleDateString('es-CO', {month:'long'})]
+  };
+}
+function goalProgress(p) {
+  const r = periodRanges();
+  return [['week', 'goal_week'], ['biweek', 'goal_biweek'], ['month', 'goal_month']].map(([k, col]) => {
+    const [a, b, label, range] = r[k], goal = Number(p[col]) || 0;
+    const sold = sum(S.sales.filter(s => s.seller_id === p.id && new Date(s.created_at) >= a && new Date(s.created_at) < b), s => s.amount);
+    return {label, range, goal, sold, pct:goal ? Math.min(100, Math.round(sold / goal * 100)) : 0, over:goal ? Math.round(sold / goal * 100) : 0};
+  });
+}
+const goalBars = p => goalProgress(p).map(g => `<div class="goal"><div class="gl"><span><b>${g.label}</b> <span class="small muted">· ${esc(g.range)}</span></span>
+  <span class="small ${g.goal ? '' : 'muted'}">${g.goal ? `${money(g.sold)} de ${money(g.goal)} · <b>${g.over}%</b>${g.over >= 100 ? ' ¡Meta cumplida!' : ''}` : 'Sin meta definida'}</span></div>
+  <div class="bar ${g.goal && g.sold >= g.goal ? 'full' : ''}" role="progressbar" aria-label="Meta ${g.label.toLowerCase()}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${g.pct}"><span style="width:${g.pct}%"></span></div></div>`).join('');
+
+ACT.empOpen = d => empDetail(d.id, 'ventas');
+ACT.empTab = d => empDetail(d.id, d.tab);
+ACT.rowDetail = d => histDetail(d.k, d.id, false);
+function empDetail(id, tab) {
+  const p = S.team.find(t => t.id === id); if (!p) return;
+  $$('.ov').forEach(o => o.close?.());
+  const sales = S.sales.filter(x => x.seller_id === id), appts = S.appts.filter(a => a.seller_id === id);
+  const refs = S.refs.filter(r => r.seller_id === id), dels = S.deliveries.filter(x => x.seller_id === id);
+  const tabs = [['ventas', 'Ventas', sales.length], ['agendas', 'Agendas', appts.length], ['referidos', 'Referidos', refs.length], ['obsequios', 'Obsequios', dels.length]];
+  const tbl = (head, rows) => rows.length ? `<div class="tw"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : '<div class="empty">Sin registros.</div>';
+  let body = '';
+  if (tab === 'ventas') body = tbl(['Fecha', 'Cliente', 'Valor', 'Comisión'], sales.map(x => `<tr class="click" data-act="rowDetail" data-k="ventas" data-id="${x.id}"><td>${fDate(x.created_at)}</td><td>${esc(apptOf(x.appointment_id)?.client_name || '—')}</td><td>${money(x.amount)}</td><td>${money(x.commission_amount)}</td></tr>`));
+  if (tab === 'agendas') body = tbl(['Fecha', 'Cliente', 'Tipo', 'Estado'], appts.map(a => `<tr class="click" data-act="openAppt" data-id="${a.id}"><td>${fDT(a.event_date)}</td><td>${esc(a.client_name)}</td><td>${TYPES[a.type]}</td><td><span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>${a.completed_at ? ' <span class="pill green">✓ Completada</span>' : ''}</td></tr>`));
+  if (tab === 'referidos') body = tbl(['Fecha', 'Referido', 'Teléfono', 'De (cliente)'], refs.map(r => `<tr class="click" data-act="rowDetail" data-k="referidos" data-id="${r.id}"><td>${fDate(r.created_at)}</td><td>${esc(r.name)}</td><td>${esc(r.phone || '—')}</td><td>${esc(apptOf(r.appointment_id)?.client_name || '—')}</td></tr>`));
+  if (tab === 'obsequios') body = tbl(['Entrega', 'Obsequio', 'Entregado a', 'Motivo'], byDelivery(dels).map(x => `<tr class="click" data-act="rowDetail" data-k="obsequios" data-id="${x.id}"><td>${fDay(x.delivered_at || x.created_at)}</td><td>${x.quantity} × ${esc(x.gift_name)}</td><td>${esc(x.recipient_name)}</td><td>${esc(x.reason)}</td></tr>`));
+  const kp = (l, v) => `<div class="card kpi" style="padding:12px"><div class="l">${l}</div><div class="v" style="font-size:18px">${v}</div></div>`;
+  modal(`Información de ${p.full_name}`, `
+    <div class="emp-head">${avatar(p.full_name, p.avatar_url, 'lg')}<div style="flex:1;min-width:200px"><b style="font-size:17px">${esc(p.full_name)}</b>
+      <div><span class="pill blue">${ROLES[p.role]}</span>${p.role !== 'admin' ? ` <span class="small muted" style="display:inline-flex;gap:6px;align-items:center"><i class="dot" style="--c:${colorOf(p.id)}"></i>color en la agenda · comisión ${p.commission_pct}%</span>` : ''}</div>
+      <div class="small muted">${esc(p.email || '')}${p.phone ? ' · ' + esc(p.phone) : ''}</div></div>
+      ${p.id !== S.me.id ? `<button class="btn sm" data-act="empChat" data-id="${p.id}">${ic('chat')} Chat</button>` : ''}</div>
+    <div class="grid kpis" style="margin-bottom:12px">${kp('Citas', appts.length)}${kp('Completadas', appts.filter(a => a.completed_at).length)}${kp('Ventas', sales.length)}${kp('Total vendido', money(sum(sales, x => x.amount)))}${kp('Comisión', money(sum(sales, x => x.commission_amount)))}</div>
+    ${p.role !== 'admin' ? `<div class="card" style="margin-bottom:12px"><h3 style="margin-bottom:10px">Metas de ventas</h3>${goalBars(p)}</div>` : ''}
+    <div class="seg" style="margin:0 0 12px" role="group" aria-label="Listados">${tabs.map(([k, l, n]) => `<button data-act="empTab" data-id="${id}" data-tab="${k}" class="${tab === k ? 'on' : ''}">${l} (${n})</button>`).join('')}</div>
+    ${body}`, {wide:true});
+}
+ACT.empChat = d => { $$('.ov').forEach(o => o.close?.()); openChat(d.id); };
+
+/* =====================================================================
+   Cotizador (pendiente de activacion)
+   ===================================================================== */
+const COTIZADOR_URL = '';   // cuando el cotizador esté listo, pega aquí su enlace y se activa para todos
+VIEWS.cotizador = el => {
+  el.innerHTML = `<div class="card" style="max-width:560px;margin:24px auto;text-align:center;padding:34px 24px">
+    <div class="av lg" style="margin:0 auto 14px;background:var(--primary-soft);color:var(--primary-dark)">${ic('calc')}</div>
+    <h2 style="margin-bottom:6px">Cotizador</h2>
+    <p class="muted" style="margin:0 0 18px">Aquí podrás crear cotizaciones para tus clientes.</p>
+    ${COTIZADOR_URL ? `<a class="btn primary" href="${esc(COTIZADOR_URL)}" target="_blank" rel="noopener noreferrer">${ic('calc')} Abrir cotizador</a>`
+      : `<a class="btn" href="#" aria-disabled="true" tabindex="-1" role="link" onclick="return false">${ic('clock')} Pendiente de activación</a>`}</div>`;
+};
 </script>
 </body>
 </html>

@@ -30,11 +30,19 @@ create table if not exists public.profiles (
   delete_requested boolean not null default false,
   avatar_url         text,
   pending_avatar_url text,
+  color              text,
+  goal_week          numeric(14,2),
+  goal_biweek        numeric(14,2),
+  goal_month         numeric(14,2),
   created_at       timestamptz not null default now()
 );
 alter table public.profiles alter column commission_pct set default 18;
 alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles add column if not exists pending_avatar_url text;
+alter table public.profiles add column if not exists color text;
+alter table public.profiles add column if not exists goal_week numeric(14,2);
+alter table public.profiles add column if not exists goal_biweek numeric(14,2);
+alter table public.profiles add column if not exists goal_month numeric(14,2);
 alter table public.groups   add column if not exists photo_url text;
 
 -- Las fotos solo pueden venir del bucket "avatars" de este proyecto
@@ -45,6 +53,13 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   alter table public.profiles add constraint profiles_pending_avatar_chk
     check (pending_avatar_url is null or pending_avatar_url like '%/storage/v1/object/public/avatars/%');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.profiles add constraint profiles_color_chk check (color is null or color ~ '^#[0-9A-Fa-f]{6}$');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.profiles add constraint profiles_goals_chk
+    check (coalesce(goal_week, 0) >= 0 and coalesce(goal_biweek, 0) >= 0 and coalesce(goal_month, 0) >= 0);
 exception when duplicate_object then null; end $$;
 do $$ begin
   alter table public.groups add constraint groups_photo_chk
@@ -68,6 +83,8 @@ create table if not exists public.appointments (
 );
 create index if not exists appointments_group_idx  on public.appointments(group_id, event_date);
 create index if not exists appointments_seller_idx on public.appointments(seller_id, event_date);
+alter table public.appointments add column if not exists completed_at timestamptz;
+alter table public.appointments add column if not exists completed_by uuid references public.profiles(id) on delete set null;
 
 create table if not exists public.sales (
   id                uuid primary key default gen_random_uuid(),
@@ -344,6 +361,7 @@ begin
     new.role := old.role; new.status := old.status; new.commission_pct := old.commission_pct;
     new.group_id := old.group_id; new.email := old.email; new.id := old.id;
     new.avatar_url := old.avatar_url;      -- la foto visible solo la cambia el admin al aprobar
+    new.color := old.color;                -- el color en la agenda lo asigna el admin
     if new.pending_avatar_url is not null and new.pending_avatar_url is distinct from old.pending_avatar_url then
       perform public.notify_managers(old.group_id, 'foto', 'Foto de perfil por aprobar',
         old.full_name || ' subio una nueva foto de perfil.');
@@ -425,6 +443,31 @@ end $$;
 drop trigger if exists appointments_notify on public.appointments;
 create trigger appointments_notify after insert or update on public.appointments
   for each row execute function public.appointments_notify();
+
+-- Cita completada: la hora y quien la completo las pone el servidor; se avisa al admin
+create or replace function public.appointments_completed() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_name text;
+begin
+  if old.completed_at is null and new.completed_at is not null then
+    new.completed_at := now();
+    new.completed_by := auth.uid();
+    if not public.is_admin() then
+      select full_name into v_name from public.profiles where id = auth.uid();
+      perform public.notify_managers(new.group_id, 'completada', 'Cita completada',
+        coalesce(v_name, 'Un emprendedor') || ' completo la cita con ' || new.client_name || '.');
+    end if;
+  elsif old.completed_at is not null and new.completed_at is null then
+    new.completed_by := null;
+  else
+    new.completed_at := old.completed_at;
+    new.completed_by := old.completed_by;
+  end if;
+  return new;
+end $$;
+drop trigger if exists appointments_completed on public.appointments;
+create trigger appointments_completed before update on public.appointments
+  for each row execute function public.appointments_completed();
 
 -- Obsequios: avisar al vendedor; congelar columnas cuando el vendedor responde
 create or replace function public.gift_assign_notify() returns trigger
@@ -646,9 +689,9 @@ create policy owner_select on public.platform_owner for select to authenticated
 -- Miembros activos de mi grupo (nombre y cargo), para chats y asignaciones
 drop function if exists public.group_members();
 create or replace function public.group_members()
-returns table(id uuid, full_name text, role text, avatar_url text)
+returns table(id uuid, full_name text, role text, avatar_url text, color text)
 language sql stable security definer set search_path = public as $$
-  select p.id, p.full_name, p.role, p.avatar_url from public.profiles p
+  select p.id, p.full_name, p.role, p.avatar_url, p.color from public.profiles p
   where p.group_id = public.my_group() and p.status = 'activo'
   order by p.full_name
 $$;
