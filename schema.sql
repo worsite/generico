@@ -716,6 +716,41 @@ language sql stable security definer set search_path = public as $$
 $$;
 grant execute on function public.group_members() to authenticated;
 
+-- El administrador "registrado" del grupo siempre sigue al cargo real, sin importar como cambie
+create or replace function public.groups_admin_changed() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_old text; v_new text;
+begin
+  select full_name into v_old from public.profiles where id = old.admin_id;
+  select full_name into v_new from public.profiles where id = new.admin_id;
+  insert into public.admin_changes(group_id, old_admin_id, old_admin_name, new_admin_id, new_admin_name)
+    values (new.id, old.admin_id, v_old, new.admin_id, v_new);
+  return new;
+end $$;
+drop trigger if exists groups_admin_changed on public.groups;
+create trigger groups_admin_changed after update of admin_id on public.groups
+  for each row when (old.admin_id is distinct from new.admin_id)
+  execute function public.groups_admin_changed();
+
+create or replace function public.sync_group_admin() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.role = 'admin' and old.role <> 'admin' then
+    update public.groups set admin_id = new.id where id = new.group_id and admin_id is distinct from new.id;
+  elsif old.role = 'admin' and new.role <> 'admin' then
+    -- si era el administrador registrado, pasa al otro administrador del grupo (si lo hay)
+    update public.groups set admin_id = coalesce(
+        (select p.id from public.profiles p where p.group_id = new.group_id and p.role = 'admin'
+           and p.status = 'activo' and p.id <> new.id order by p.created_at desc limit 1), admin_id)
+      where id = new.group_id and admin_id = new.id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists sync_group_admin on public.profiles;
+create trigger sync_group_admin after update of role on public.profiles
+  for each row when (old.role is distinct from new.role)
+  execute function public.sync_group_admin();
+
 -- Transferir la administracion del grupo a otro miembro activo.
 -- El administrador actual pasa a ser emprendedor; la mensualidad sigue siendo del grupo.
 create or replace function public.transfer_admin(p_user uuid) returns void
@@ -738,8 +773,6 @@ begin
   perform set_config('app.transfer', '', true);
   update public.groups set admin_id = v_to.id where id = v_me.group_id;
 
-  insert into public.admin_changes(group_id, old_admin_id, old_admin_name, new_admin_id, new_admin_name)
-    values (v_me.group_id, v_me.id, v_me.full_name, v_to.id, v_to.full_name);
   insert into public.notifications(group_id, user_id, type, title, body) values
     (v_me.group_id, v_to.id, 'cargo', 'Ahora eres el administrador',
      v_me.full_name || ' te dio la administracion del grupo.'),
@@ -795,7 +828,7 @@ language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.is_owner() then raise exception 'Sin permiso'; end if;
   return query
-  select g.id, g.name, p.id, p.full_name, p.email, p.phone, s.registered_at, s.paid_until, s.blocked,
+  select g.id, g.name, a.id, a.full_name, a.email, a.phone, s.registered_at, s.paid_until, s.blocked,
          (select count(*) from public.profiles x where x.group_id = g.id and x.role <> 'admin' and x.status = 'activo'),
          (select count(*) from public.payments y where y.group_id = g.id),
          (select max(y.paid_at) from public.payments y where y.group_id = g.id),
@@ -803,7 +836,9 @@ begin
          ch.old_admin_name, ch.changed_at
   from public.groups g
   join public.subscriptions s on s.group_id = g.id
-  left join public.profiles p on p.id = g.admin_id
+  left join lateral (select x.id, x.full_name, x.email, x.phone from public.profiles x
+                     where x.group_id = g.id and x.role = 'admin' and x.status = 'activo'
+                     order by (x.id = g.admin_id) desc, x.created_at desc limit 1) a on true
   left join lateral (select c.old_admin_name, c.changed_at from public.admin_changes c
                      where c.group_id = g.id order by c.changed_at desc limit 1) ch on true
   order by s.registered_at desc;
@@ -880,6 +915,13 @@ insert into public.subscriptions(group_id, paid_until)
   select g.id, public.bogota_today() + (select first_payment_days from public.platform_settings where id = 1)
   from public.groups g
   where not exists (select 1 from public.subscriptions s where s.group_id = g.id);
+
+-- grupos cuyo administrador registrado ya no tiene el cargo: se apunta al administrador actual
+update public.groups g set admin_id = a.id
+from (select distinct on (p.group_id) p.group_id, p.id from public.profiles p
+      where p.role = 'admin' and p.status = 'activo' order by p.group_id, p.created_at desc) a
+where a.group_id = g.id and g.admin_id is distinct from a.id
+  and not exists (select 1 from public.profiles q where q.id = g.admin_id and q.role = 'admin');
 
 -- ventas anteriores: se calcula la base sin IVA (la comision registrada no se toca)
 alter table public.sales disable trigger sales_set_commission;
