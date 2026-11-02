@@ -240,7 +240,8 @@ function renderTable() {
   $('#seg').innerHTML = FILTERS.map(([k, l]) => `<button data-f="${k}" class="${S.filter === k ? 'on' : ''}">${l} (${cnt(k)})</button>`).join('');
   $$('#seg [data-f]').forEach(b => b.onclick = () => { S.filter = b.dataset.f; renderTable(); });
   $('#tbl').innerHTML = rows.length ? `<div class="tw"><table><thead><tr><th>Administrador</th><th>Grupo</th><th>Registro</th><th>Vence</th><th class="num">Mensualidad</th><th class="num">Pagado</th><th>Estado</th><th></th></tr></thead><tbody>
-    ${rows.map(({r, s}) => `<tr><td><b>${esc(r.admin_name || '—')}</b><div class="small muted">${esc(r.admin_email || '')}</div><div class="small muted">${esc(r.admin_phone || '')}</div></td>
+    ${rows.map(({r, s}) => `<tr><td><b>${esc(r.admin_name || '—')}</b><div class="small muted">${esc(r.admin_email || '')}</div><div class="small muted">${esc(r.admin_phone || '')}</div>
+        ${r.prev_admin_name ? `<div class="small" style="margin-top:4px"><span class="pill ${daysSince(r.admin_changed_at) <= 30 ? 'blue' : ''}">Cambio de administrador</span> <span class="muted">Antes: ${esc(r.prev_admin_name)} · ${fDay(r.admin_changed_at)}</span></div>` : ''}</td>
       <td>${esc(r.group_name)}<div class="small muted">${r.sellers} emprendedor(es)</div></td><td>${fDT(r.registered_at)}</td>
       <td>${fDay(r.paid_until)}<div class="small ${s.days < 0 ? '' : 'muted'}" style="${s.days < 0 ? 'color:var(--danger)' : ''}">${s.days < 0 ? `hace ${-s.days} día(s)` : s.days === 0 ? 'vence hoy' : `en ${s.days} día(s)`}</div></td>
       <td class="num">${money(S.settings.monthly_price)}</td><td class="num">${money(r.total_paid)}<div class="small muted" style="font-family:var(--font)">${r.payments_count} pago(s)</div></td>
@@ -252,6 +253,7 @@ function renderTable() {
 }
 
 /* ---------- acciones ---------- */
+const daysSince = d => Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
 const rowOf = g => S.rows.find(r => r.group_id === g);
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -289,10 +291,12 @@ function due(r) {
 function hist(r) {
   const m = modal(`Pagos · ${r.group_name}`, '<div class="muted">Cargando…</div>');
   run(async () => {
-    const p = await q(sb.rpc('owner_payments', {p_group:r.group_id}));
-    $('.modal > div:last-child', m).innerHTML = p.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th class="num">Valor</th><th>Cubre hasta</th><th>Nota</th></tr></thead><tbody>
+    const [p, ch] = await Promise.all([q(sb.rpc('owner_payments', {p_group:r.group_id})), q(sb.rpc('owner_admin_changes', {p_group:r.group_id}))]);
+    const changes = ch.length ? `<h3 style="margin:16px 0 8px">Cambios de administrador</h3><div class="tw"><table><thead><tr><th>Fecha</th><th>Antes</th><th>Ahora</th></tr></thead><tbody>
+      ${ch.map(x => `<tr><td>${fDT(x.changed_at)}</td><td>${esc(x.old_admin_name || '—')}</td><td><b>${esc(x.new_admin_name || '—')}</b></td></tr>`).join('')}</tbody></table></div>` : '';
+    $('.modal > div:last-child', m).innerHTML = (p.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th class="num">Valor</th><th>Cubre hasta</th><th>Nota</th></tr></thead><tbody>
       ${p.map(x => `<tr><td>${fDT(x.paid_at)}</td><td class="num">${money(x.amount)}</td><td>${fDay(x.period_end)} <span class="small muted">(${x.months} mes)</span></td><td>${esc(x.note || '')}</td></tr>`).join('')}</tbody></table></div>`
-      : '<div class="empty">Todavía no hay pagos registrados.</div>';
+      : '<div class="empty">Todavía no hay pagos registrados.</div>') + changes;
   });
 }
 </script>

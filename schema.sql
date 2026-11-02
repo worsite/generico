@@ -209,6 +209,18 @@ create table if not exists public.payments (
 );
 create index if not exists payments_group_idx on public.payments(group_id, paid_at desc);
 
+-- Historial de cambios de administrador de cada grupo (lo ve el dueño en control.html)
+create table if not exists public.admin_changes (
+  id             uuid primary key default gen_random_uuid(),
+  group_id       uuid not null references public.groups(id) on delete cascade,
+  old_admin_id   uuid,
+  old_admin_name text,
+  new_admin_id   uuid,
+  new_admin_name text,
+  changed_at     timestamptz not null default now()
+);
+create index if not exists admin_changes_group_idx on public.admin_changes(group_id, changed_at desc);
+
 -- ---------- Funciones auxiliares (SECURITY DEFINER evita recursion de RLS)
 
 create or replace function public.bogota_today() returns date
@@ -324,8 +336,14 @@ declare
   v_role text := public.my_role();
 begin
   if v_role = 'admin' then
-    -- el admin no puede quitarse a si mismo el cargo ni cambiar de grupo
-    if old.id = auth.uid() then new.role := old.role; new.status := old.status; end if;
+    -- el admin no puede quitarse a si mismo el cargo ni cambiar de grupo, ni dar el cargo de
+    -- admin por esta via: para eso existe transfer_admin() (que activa app.transfer)
+    if coalesce(current_setting('app.transfer', true), '') <> '1' then
+      if old.id = auth.uid() then new.role := old.role; new.status := old.status; end if;
+      if new.role = 'admin' and old.role <> 'admin' then
+        raise exception 'Para dar la administracion usa "Dar la administracion"';
+      end if;
+    end if;
     new.group_id := old.group_id;
     new.id := old.id;
     -- avisar al vendedor si se le rechaza la baja o cambian cargo/comision
@@ -333,9 +351,9 @@ begin
       insert into public.notifications(group_id, user_id, type, title, body)
         values (old.group_id, old.id, 'baja', 'Solicitud de baja rechazada', 'El administrador rechazo tu solicitud de eliminar la cuenta.');
     end if;
-    if old.role <> new.role then
+    if old.role <> new.role and coalesce(current_setting('app.transfer', true), '') <> '1' then
       insert into public.notifications(group_id, user_id, type, title, body)
-        values (old.group_id, old.id, 'cargo', 'Cambio de cargo', 'Tu cargo ahora es: ' || new.role || '.');
+        values (old.group_id, old.id, 'cargo', 'Cambio de cargo', 'Tu cargo ahora es: ' || case new.role when 'vendedor' then 'emprendedor' else new.role end || '.');
     end if;
     if old.commission_pct <> new.commission_pct then
       insert into public.notifications(group_id, user_id, type, title, body)
@@ -553,6 +571,7 @@ alter table public.platform_owner   enable row level security;
 alter table public.platform_settings enable row level security;
 alter table public.subscriptions    enable row level security;
 alter table public.payments         enable row level security;
+alter table public.admin_changes    enable row level security;
 
 -- groups
 drop policy if exists groups_select on public.groups;
@@ -697,6 +716,38 @@ language sql stable security definer set search_path = public as $$
 $$;
 grant execute on function public.group_members() to authenticated;
 
+-- Transferir la administracion del grupo a otro miembro activo.
+-- El administrador actual pasa a ser emprendedor; la mensualidad sigue siendo del grupo.
+create or replace function public.transfer_admin(p_user uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_me public.profiles; v_to public.profiles;
+begin
+  select * into v_me from public.profiles where id = auth.uid() and role = 'admin' and status = 'activo';
+  if v_me.id is null or v_me.group_id is distinct from public.my_group() then
+    raise exception 'Solo el administrador puede dar la administracion';
+  end if;
+  select * into v_to from public.profiles where id = p_user;
+  if v_to.id is null or v_to.group_id <> v_me.group_id or v_to.status <> 'activo' then
+    raise exception 'Esa persona no es un miembro activo de tu grupo';
+  end if;
+  if v_to.id = v_me.id then raise exception 'Ya eres el administrador'; end if;
+
+  perform set_config('app.transfer', '1', true);
+  update public.profiles set role = 'admin' where id = v_to.id;
+  update public.profiles set role = 'vendedor' where id = v_me.id;
+  perform set_config('app.transfer', '', true);
+  update public.groups set admin_id = v_to.id where id = v_me.group_id;
+
+  insert into public.admin_changes(group_id, old_admin_id, old_admin_name, new_admin_id, new_admin_name)
+    values (v_me.group_id, v_me.id, v_me.full_name, v_to.id, v_to.full_name);
+  insert into public.notifications(group_id, user_id, type, title, body) values
+    (v_me.group_id, v_to.id, 'cargo', 'Ahora eres el administrador',
+     v_me.full_name || ' te dio la administracion del grupo.'),
+    (v_me.group_id, v_me.id, 'cargo', 'Administracion transferida',
+     'Ahora ' || v_to.full_name || ' es el administrador y tu cargo es emprendedor.');
+end $$;
+grant execute on function public.transfer_admin(uuid) to authenticated;
+
 -- Estado de la mensualidad del administrador que consulta
 create or replace function public.my_subscription() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
@@ -734,10 +785,12 @@ begin
 end $$;
 grant execute on function public.owner_settings() to authenticated;
 
+drop function if exists public.owner_overview();
 create or replace function public.owner_overview()
 returns table(group_id uuid, group_name text, admin_id uuid, admin_name text, admin_email text,
               admin_phone text, registered_at timestamptz, paid_until date, blocked boolean,
-              sellers bigint, payments_count bigint, last_payment timestamptz, total_paid numeric)
+              sellers bigint, payments_count bigint, last_payment timestamptz, total_paid numeric,
+              prev_admin_name text, admin_changed_at timestamptz)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.is_owner() then raise exception 'Sin permiso'; end if;
@@ -746,13 +799,24 @@ begin
          (select count(*) from public.profiles x where x.group_id = g.id and x.role <> 'admin' and x.status = 'activo'),
          (select count(*) from public.payments y where y.group_id = g.id),
          (select max(y.paid_at) from public.payments y where y.group_id = g.id),
-         (select coalesce(sum(y.amount), 0) from public.payments y where y.group_id = g.id)
+         (select coalesce(sum(y.amount), 0) from public.payments y where y.group_id = g.id),
+         ch.old_admin_name, ch.changed_at
   from public.groups g
   join public.subscriptions s on s.group_id = g.id
   left join public.profiles p on p.id = g.admin_id
+  left join lateral (select c.old_admin_name, c.changed_at from public.admin_changes c
+                     where c.group_id = g.id order by c.changed_at desc limit 1) ch on true
   order by s.registered_at desc;
 end $$;
 grant execute on function public.owner_overview() to authenticated;
+
+create or replace function public.owner_admin_changes(p_group uuid) returns setof public.admin_changes
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_owner() then raise exception 'Sin permiso'; end if;
+  return query select * from public.admin_changes where group_id = p_group order by changed_at desc;
+end $$;
+grant execute on function public.owner_admin_changes(uuid) to authenticated;
 
 create or replace function public.owner_payments(p_group uuid) returns setof public.payments
 language plpgsql stable security definer set search_path = public as $$
