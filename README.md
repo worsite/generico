@@ -1,11 +1,11 @@
-# Catálogo Tramicuba
+# Portafolio Más Trámites Cuba
 
-Catálogo de servicios en un solo archivo: `index.html` (sin dependencias salvo las fuentes de Google).
+Portafolio de servicios en un solo archivo: `index.html` (sin dependencias salvo las fuentes de Google).
 
-- 28 servicios en 5 categorías; cada uno es una tarjeta con ilustración y nombre.
-- Al tocar una tarjeta se abre un panel con la información del servicio y un formulario de cotización
-  (nombre, celular, ciudad, dato opcional según el servicio, urgencia y resumen del caso).
-- El formulario abre WhatsApp (573216081381) con la solicitud ya redactada. No guarda ni envía datos a ningún servidor.
+- Estilo oscuro con 5 puertas de colores (una por categoría). Al tocar una puerta se abre la sala con los servicios de esa categoría.
+- Cada servicio se muestra como una tarjeta con su ilustración, descripción y botón "Cotizar este servicio".
+- El panel de cotización (nombre, celular, ciudad, dato opcional, urgencia y resumen del caso) abre WhatsApp (573216081381) con la solicitud ya redactada. No se guarda ni se envía nada a un servidor.
+- El botón "atrás" del celular cierra la sala o el panel.
 - Sin precios y sin panel de administración.
 
 ## Probar
@@ -15,5 +15,4 @@ Abrir `index.html` en el navegador (requiere internet solo para las fuentes).
 Entrar a app.netlify.com/drop y arrastrar esta carpeta (o solo `index.html`).
 
 ## Editar servicios
-Los servicios están en el arreglo `CATS` dentro del `<script>` de `index.html`. Las ilustraciones son SVG propios
-(objeto `ICONS`); se pueden reemplazar por fotos más adelante.
+Los servicios están en el arreglo `CATS` dentro del `<script>` de `index.html`; los colores de las puertas, en `META`.
