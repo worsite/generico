@@ -2,10 +2,11 @@
 
 Portafolio de servicios en un solo archivo: `index.html` (sin dependencias salvo la fuente Inter de Google).
 
-- 5 libros de colores (uno por categoría). Al tocar un libro se abre y muestra los servicios de esa categoría.
+- 5 libros de colores con emoji (uno por categoría). Al tocar un libro se abre y muestra los servicios de esa categoría.
 - Cada servicio es una tarjeta con la imagen (recorte de su flyer), la pregunta, qué incluye y el botón "Cotizar este servicio".
 - El panel de cotización (nombre, celular, ciudad, dato opcional, urgencia y resumen del caso) abre WhatsApp (573216081381) con la solicitud ya redactada. No se guarda ni se envía nada a un servidor.
 - El botón "atrás" del celular cierra la sala o el panel.
+- Idioma español / inglés y tema claro / oscuro (se recuerdan en el navegador). Los textos en inglés están en los objetos `T`, `ENC` y `EN` del `<script>`.
 - Sin precios y sin panel de administración.
 
 ## Probar
