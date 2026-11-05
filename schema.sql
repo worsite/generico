@@ -85,6 +85,20 @@ create index if not exists appointments_group_idx  on public.appointments(group_
 create index if not exists appointments_seller_idx on public.appointments(seller_id, event_date);
 alter table public.appointments add column if not exists completed_at timestamptz;
 alter table public.appointments add column if not exists completed_by uuid references public.profiles(id) on delete set null;
+alter table public.appointments add column if not exists process_note text;
+alter table public.appointments add column if not exists process_at timestamptz;
+alter table public.appointments add column if not exists process_by uuid references public.profiles(id) on delete set null;
+alter table public.appointments add column if not exists referrals_count integer;
+alter table public.appointments add column if not exists delete_reason text;
+alter table public.appointments add column if not exists delete_requested_at timestamptz;
+alter table public.appointments add column if not exists delete_requested_by uuid references public.profiles(id) on delete set null;
+alter table public.appointments drop constraint if exists appointments_status_check;
+alter table public.appointments drop constraint if exists appointments_status_chk;
+alter table public.appointments add constraint appointments_status_chk
+  check (status in ('pendiente','en_proceso','venta','sin_venta','cancelada'));
+do $$ begin
+  alter table public.appointments add constraint appointments_refs_chk check (referrals_count is null or referrals_count >= 0);
+exception when duplicate_object then null; end $$;
 
 create table if not exists public.sales (
   id                uuid primary key default gen_random_uuid(),
@@ -191,6 +205,16 @@ create table if not exists public.platform_settings (
   warn_days          int not null default 3
 );
 insert into public.platform_settings(id) values (1) on conflict do nothing;
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'platform_settings' and column_name = 'currency') then
+    alter table public.platform_settings add column currency text not null default 'USD';
+    update public.platform_settings set monthly_price = 30 where id = 1;   -- el valor anterior estaba en pesos: ajustalo en control.html
+  end if;
+end $$;
+do $$ begin
+  alter table public.platform_settings add constraint platform_currency_chk check (currency in ('USD','COP'));
+exception when duplicate_object then null; end $$;
 create table if not exists public.subscriptions (
   group_id      uuid primary key references public.groups(id) on delete cascade,
   registered_at timestamptz not null default now(),
@@ -208,6 +232,21 @@ create table if not exists public.payments (
   note        text
 );
 create index if not exists payments_group_idx on public.payments(group_id, paid_at desc);
+alter table public.subscriptions add column if not exists custom_price numeric(14,2);
+alter table public.subscriptions add column if not exists custom_currency text;
+do $$ begin
+  alter table public.subscriptions add constraint subs_custom_chk
+    check ((custom_price is null or custom_price >= 0) and (custom_currency is null or custom_currency in ('USD','COP')));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'payments' and column_name = 'currency') then
+    alter table public.payments add column currency text;
+    update public.payments set currency = 'COP' where currency is null;   -- los pagos anteriores eran en pesos
+    alter table public.payments alter column currency set default 'USD';
+    alter table public.payments alter column currency set not null;
+  end if;
+end $$;
 
 -- Historial de cambios de administrador de cada grupo (lo ve el dueño en control.html)
 create table if not exists public.admin_changes (
@@ -487,6 +526,82 @@ drop trigger if exists appointments_completed on public.appointments;
 create trigger appointments_completed before update on public.appointments
   for each row execute function public.appointments_completed();
 
+-- Avisa a los roles indicados (menos a quien hizo la accion)
+create or replace function public.notify_roles(p_group uuid, p_roles text[], p_type text, p_title text, p_body text, p_except uuid)
+returns void language sql security definer set search_path = public as $$
+  insert into public.notifications(group_id, user_id, type, title, body)
+  select p_group, id, p_type, p_title, p_body from public.profiles
+  where group_id = p_group and status = 'activo' and role = any(p_roles) and id is distinct from p_except
+$$;
+
+-- Venta en proceso (con nota), solicitud de eliminacion (con motivo) y referidos registrados
+create or replace function public.appointments_flow() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_name text;
+begin
+  select full_name into v_name from public.profiles where id = auth.uid();
+  v_name := coalesce(v_name, 'Un emprendedor');
+
+  -- venta en proceso: la nota es obligatoria; el autor y la hora los pone el servidor
+  if new.status = 'en_proceso' and (old.status is distinct from 'en_proceso' or new.process_note is distinct from old.process_note) then
+    if coalesce(trim(new.process_note), '') = '' then
+      raise exception 'Escribe en que quedo el proceso de la venta';
+    end if;
+    new.process_at := now(); new.process_by := auth.uid();
+    perform public.notify_roles(new.group_id, array['admin'], 'proceso', 'Venta en proceso',
+      v_name || ' dejo una nota sobre la venta con ' || new.client_name || ': ' || left(new.process_note, 160), auth.uid());
+  else
+    new.process_note := old.process_note; new.process_at := old.process_at; new.process_by := old.process_by;
+  end if;
+
+  -- eliminacion: el emprendedor la solicita con un motivo; admin o agendador la aprueban o la rechazan
+  if new.delete_reason is not null and old.delete_reason is null then
+    if trim(new.delete_reason) = '' then raise exception 'Escribe el motivo para eliminar la cita'; end if;
+    new.delete_requested_at := now(); new.delete_requested_by := auth.uid();
+    perform public.notify_roles(new.group_id, array['admin','agendador'], 'eliminacion', 'Solicitud para eliminar una cita',
+      v_name || ' pide eliminar la cita con ' || new.client_name || '. Motivo: ' || left(new.delete_reason, 160), auth.uid());
+  elsif new.delete_reason is null and old.delete_reason is not null then
+    new.delete_requested_at := null; new.delete_requested_by := null;
+    if old.delete_requested_by is not null and old.delete_requested_by is distinct from auth.uid()
+       and exists (select 1 from public.profiles where id = old.delete_requested_by) then
+      insert into public.notifications(group_id, user_id, type, title, body)
+        values (new.group_id, old.delete_requested_by, 'eliminacion', 'Eliminacion rechazada',
+                'No se aprobo eliminar la cita con ' || new.client_name || '.');
+    end if;
+  else
+    new.delete_reason := old.delete_reason; new.delete_requested_at := old.delete_requested_at;
+    new.delete_requested_by := old.delete_requested_by;
+  end if;
+
+  -- referidos: se registra la cantidad y se avisa al admin y al agendador
+  if new.referrals_count is distinct from old.referrals_count and coalesce(new.referrals_count, 0) > 0 then
+    perform public.notify_roles(new.group_id, array['admin','agendador'], 'referidos', 'Referidos registrados',
+      v_name || ' registro ' || new.referrals_count || ' referido(s) de la cita con ' || new.client_name
+      || '. Debe enviar la imagen de los referidos.', auth.uid());
+  end if;
+  return new;
+end $$;
+drop trigger if exists appointments_flow on public.appointments;
+create trigger appointments_flow before update on public.appointments
+  for each row execute function public.appointments_flow();
+
+-- Si se aprueba la eliminacion, el emprendedor recibe el aviso
+create or replace function public.appointments_deleted() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if old.delete_reason is not null and old.seller_id is not null
+     and exists (select 1 from public.profiles where id = old.seller_id)
+     and exists (select 1 from public.groups where id = old.group_id) then
+    insert into public.notifications(group_id, user_id, type, title, body)
+      values (old.group_id, old.seller_id, 'eliminacion', 'Cita eliminada',
+              'Se aprobo eliminar la cita con ' || old.client_name || '.');
+  end if;
+  return old;
+end $$;
+drop trigger if exists appointments_deleted on public.appointments;
+create trigger appointments_deleted after delete on public.appointments
+  for each row execute function public.appointments_deleted();
+
 -- Obsequios: avisar al vendedor; congelar columnas cuando el vendedor responde
 create or replace function public.gift_assign_notify() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -605,7 +720,7 @@ create policy appts_update on public.appointments for update to authenticated
   with check (group_id = public.my_group() and (public.is_manager() or seller_id = auth.uid()));
 drop policy if exists appts_delete on public.appointments;
 create policy appts_delete on public.appointments for delete to authenticated
-  using (group_id = public.my_group() and (public.is_manager() or seller_id = auth.uid()));
+  using (group_id = public.my_group() and public.is_manager());   -- los emprendedores piden la eliminacion
 
 -- sales
 drop policy if exists sales_select on public.sales;
@@ -784,19 +899,22 @@ grant execute on function public.transfer_admin(uuid) to authenticated;
 -- Estado de la mensualidad del administrador que consulta
 create or replace function public.my_subscription() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare v_group uuid; s public.subscriptions; st public.platform_settings; v_days int;
+declare v_group uuid; s public.subscriptions; st public.platform_settings; v_days int; v_price numeric; v_cur text;
 begin
   select group_id into v_group from public.profiles
     where id = auth.uid() and role = 'admin' and status = 'activo';
   if v_group is null then return null; end if;
   select * into st from public.platform_settings where id = 1;
   select * into s from public.subscriptions where group_id = v_group;
+  v_price := coalesce(s.custom_price, st.monthly_price);
+  v_cur   := case when s.custom_price is not null then coalesce(s.custom_currency, 'USD') else st.currency end;
   if s.group_id is null then
-    return jsonb_build_object('blocked', false, 'price', st.monthly_price, 'warn_days', st.warn_days);
+    return jsonb_build_object('blocked', false, 'price', v_price, 'currency', v_cur, 'warn_days', st.warn_days);
   end if;
   v_days := s.paid_until - public.bogota_today();
   return jsonb_build_object('blocked', s.blocked or v_days < 0, 'manual', s.blocked,
-    'paid_until', s.paid_until, 'days_left', v_days, 'price', st.monthly_price, 'warn_days', st.warn_days);
+    'paid_until', s.paid_until, 'days_left', v_days, 'price', v_price, 'currency', v_cur,
+    'custom', s.custom_price is not null, 'warn_days', st.warn_days);
 end $$;
 grant execute on function public.my_subscription() to authenticated;
 
@@ -822,8 +940,9 @@ drop function if exists public.owner_overview();
 create or replace function public.owner_overview()
 returns table(group_id uuid, group_name text, admin_id uuid, admin_name text, admin_email text,
               admin_phone text, registered_at timestamptz, paid_until date, blocked boolean,
-              sellers bigint, payments_count bigint, last_payment timestamptz, total_paid numeric,
-              prev_admin_name text, admin_changed_at timestamptz)
+              sellers bigint, payments_count bigint, last_payment timestamptz, paid_usd numeric, paid_cop numeric,
+              prev_admin_name text, admin_changed_at timestamptz,
+              price numeric, currency text, custom_price boolean)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.is_owner() then raise exception 'Sin permiso'; end if;
@@ -832,10 +951,15 @@ begin
          (select count(*) from public.profiles x where x.group_id = g.id and x.role <> 'admin' and x.status = 'activo'),
          (select count(*) from public.payments y where y.group_id = g.id),
          (select max(y.paid_at) from public.payments y where y.group_id = g.id),
-         (select coalesce(sum(y.amount), 0) from public.payments y where y.group_id = g.id),
-         ch.old_admin_name, ch.changed_at
+         (select coalesce(sum(y.amount), 0) from public.payments y where y.group_id = g.id and y.currency = 'USD'),
+         (select coalesce(sum(y.amount), 0) from public.payments y where y.group_id = g.id and y.currency = 'COP'),
+         ch.old_admin_name, ch.changed_at,
+         coalesce(s.custom_price, st.monthly_price),
+         case when s.custom_price is not null then coalesce(s.custom_currency, 'USD') else st.currency end,
+         s.custom_price is not null
   from public.groups g
   join public.subscriptions s on s.group_id = g.id
+  cross join (select * from public.platform_settings where id = 1) st
   left join lateral (select x.id, x.full_name, x.email, x.phone from public.profiles x
                      where x.group_id = g.id and x.role = 'admin' and x.status = 'activo'
                      order by (x.id = g.admin_id) desc, x.created_at desc limit 1) a on true
@@ -863,16 +987,18 @@ grant execute on function public.owner_payments(uuid) to authenticated;
 
 create or replace function public.owner_mark_paid(p_group uuid, p_amount numeric, p_months int, p_note text)
 returns void language plpgsql security definer set search_path = public as $$
-declare s public.subscriptions; v_new date; v_admin uuid;
+declare s public.subscriptions; v_new date; v_admin uuid; v_cur text;
 begin
   if not public.is_owner() then raise exception 'Sin permiso'; end if;
   if p_months is null or p_months < 1 then raise exception 'Meses invalidos'; end if;
   select * into s from public.subscriptions where group_id = p_group;
   if s.group_id is null then raise exception 'Grupo no encontrado'; end if;
+  v_cur := case when s.custom_price is not null then coalesce(s.custom_currency, 'USD')
+                else (select currency from public.platform_settings where id = 1) end;
   v_new := (greatest(s.paid_until, public.bogota_today()) + make_interval(months => p_months))::date;
   update public.subscriptions set paid_until = v_new, blocked = false where group_id = p_group;
-  insert into public.payments(group_id, amount, months, period_end, note)
-    values (p_group, coalesce(p_amount, 0), p_months, v_new, nullif(trim(p_note), ''));
+  insert into public.payments(group_id, amount, currency, months, period_end, note)
+    values (p_group, coalesce(p_amount, 0), v_cur, p_months, v_new, nullif(trim(p_note), ''));
   select admin_id into v_admin from public.groups where id = p_group;
   if v_admin is not null and exists (select 1 from public.profiles where id = v_admin) then
     insert into public.notifications(group_id, user_id, type, title, body)
@@ -898,15 +1024,31 @@ begin
 end $$;
 grant execute on function public.owner_set_due(uuid, date) to authenticated;
 
-create or replace function public.owner_update_settings(p_price numeric, p_first_days int, p_warn_days int)
+drop function if exists public.owner_update_settings(numeric, int, int);
+create or replace function public.owner_update_settings(p_price numeric, p_first_days int, p_warn_days int, p_currency text)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_owner() then raise exception 'Sin permiso'; end if;
   if p_price < 0 or p_first_days < 0 or p_warn_days < 0 then raise exception 'Valores invalidos'; end if;
+  if p_currency not in ('USD','COP') then raise exception 'Moneda invalida'; end if;
   update public.platform_settings
-    set monthly_price = p_price, first_payment_days = p_first_days, warn_days = p_warn_days where id = 1;
+    set monthly_price = p_price, first_payment_days = p_first_days, warn_days = p_warn_days, currency = p_currency where id = 1;
 end $$;
-grant execute on function public.owner_update_settings(numeric, int, int) to authenticated;
+grant execute on function public.owner_update_settings(numeric, int, int, text) to authenticated;
+
+-- Precio personalizado de un administrador (p_price nulo = vuelve al precio general)
+create or replace function public.owner_set_price(p_group uuid, p_price numeric, p_currency text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_owner() then raise exception 'Sin permiso'; end if;
+  if p_price is not null and (p_price < 0 or coalesce(p_currency, 'USD') not in ('USD','COP')) then
+    raise exception 'Valores invalidos';
+  end if;
+  update public.subscriptions
+    set custom_price = p_price, custom_currency = case when p_price is null then null else coalesce(p_currency, 'USD') end
+    where group_id = p_group;
+end $$;
+grant execute on function public.owner_set_price(uuid, numeric, text) to authenticated;
 
 -- ---------- Datos para instalaciones anteriores ----------------------------
 
@@ -915,6 +1057,13 @@ insert into public.subscriptions(group_id, paid_until)
   select g.id, public.bogota_today() + (select first_payment_days from public.platform_settings where id = 1)
   from public.groups g
   where not exists (select 1 from public.subscriptions s where s.group_id = g.id);
+
+-- referidos registrados con el formulario anterior: pasan a ser un numero por cita
+alter table public.appointments disable trigger appointments_flow;
+update public.appointments a set referrals_count = c.n
+  from (select appointment_id, count(*)::int as n from public.referrals where appointment_id is not null group by 1) c
+  where c.appointment_id = a.id and a.referrals_count is null;
+alter table public.appointments enable trigger appointments_flow;
 
 -- grupos cuyo administrador registrado ya no tiene el cargo: se apunta al administrador actual
 update public.groups g set admin_id = a.id

@@ -209,6 +209,10 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .cempty{flex:1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
 .chat .back{display:none}
 .scrim{display:none}
+.remind{display:flex;gap:10px;align-items:flex-start;background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13.5px;margin:4px 0 14px}
+.note-card{background:var(--warn-soft);border:1px solid #FCD34D;border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.del-card{background:var(--danger-soft);border:1px solid #F5C2C2;border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.bignum{font-family:var(--mono);font-weight:600;font-size:18px}
 .ok{background:var(--accent-soft);color:#065F46;border-radius:8px;padding:9px 12px;font-size:13.5px;margin-bottom:12px}
 .linkbtn{border:0;background:none;color:var(--primary-dark);font-weight:500;padding:0;text-decoration:underline;cursor:pointer;text-align:left}
 .btn[aria-disabled=true]{opacity:.75;cursor:not-allowed;pointer-events:none}
@@ -291,6 +295,8 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cop = new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0});
 const money = n => cop.format(Number(n) || 0);
+// Mensualidad: puede estar en dolares (por defecto) o en pesos
+const moneyC = (n, cur) => new Intl.NumberFormat('es-CO', {style:'currency', currency:cur === 'COP' ? 'COP' : 'USD', maximumFractionDigits:cur === 'COP' ? 0 : 2}).format(Number(n) || 0);
 const sum = (a, f) => a.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 const fDate = d => new Date(d).toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
 const fTime = d => new Date(d).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
@@ -298,8 +304,8 @@ const fDay = d => new Date(String(d).slice(0, 10) + 'T00:00:00').toLocaleDateStr
 const fDT = d => `${fDate(d)} · ${fTime(d)}`;
 const toInput = d => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
 const TYPES = {mantenimiento:'Mantenimiento', demo:'Demo', servicio_adicional:'Servicio adicional'};
-const STATUS = {pendiente:'Pendiente', venta:'Venta', sin_venta:'Sin venta', cancelada:'Cancelada'};
-const STATUS_PILL = {pendiente:'blue', venta:'green', sin_venta:'', cancelada:'red'};
+const STATUS = {pendiente:'Pendiente', en_proceso:'Venta en proceso', venta:'Venta', sin_venta:'Sin venta', cancelada:'Cancelada'};
+const STATUS_PILL = {pendiente:'blue', en_proceso:'warn', venta:'green', sin_venta:'', cancelada:'red'};
 const ROLES = {admin:'Administrador', agendador:'Agendador', vendedor:'Emprendedor'};
 // La comision se calcula sobre la venta sin IVA (venta / 1,19). Admin: 30 %. Emprendedor y agendador: 18 % por defecto.
 const IVA = 1.19, ADMIN_PCT = 30;
@@ -407,6 +413,7 @@ const colorOf = id => {
   return safeColor(m?.color) || PALETTE[hashStr(id) % PALETTE.length];
 };
 const apptOf = id => S.appts.find(a => a.id === id);
+const refCount = a => a.referrals_count ?? S.refs.filter(r => r.appointment_id === a.id).length;
 const saleOf = apptId => S.sales.find(s => s.appointment_id === apptId);
 const unread = () => S.notifs.filter(n => !n.read).length;
 
@@ -586,7 +593,7 @@ function renderBlocked() {
     <div class="brand" style="justify-content:center"><span class="logo">${ic('chart')}</span>Control de Equipo</div>
     <h2>Acceso bloqueado</h2>
     <p class="muted">Hola ${esc(S.me.full_name)}, ${s.manual ? 'el acceso a tu cuenta fue bloqueado por falta de pago' : 'tu mensualidad está vencida'}.
-    Debes pagar <b>${money(s.price)}</b> para tener nuevamente el acceso.</p>
+    Debes pagar <b>${moneyC(s.price, s.currency)}</b> para tener nuevamente el acceso.</p>
     ${s.paid_until ? `<p class="small muted">Fecha de vencimiento: ${fDay(s.paid_until)}.</p>` : ''}
     <p class="small">Cuando realices el pago, el administrador de la plataforma lo registra y recuperas el acceso de inmediato. Tus emprendedores siguen trabajando con normalidad.</p>
     <div class="actions" style="justify-content:center"><button class="btn primary" id="bRef">Ya pagué, revisar</button><button class="btn" id="bOut">Salir</button></div>${creditHtml()}</div></div>`;
@@ -712,7 +719,7 @@ function subBanner() {
   const s = S.sub;
   if (!isAdmin() || !s || s.blocked || s.days_left == null || s.days_left > (s.warn_days ?? 3)) return '';
   const cuando = s.days_left <= 0 ? 'vence hoy' : `vence en ${s.days_left} día${s.days_left === 1 ? '' : 's'}`;
-  return `${ic('bell')}<span>Tu mensualidad de <b>${money(s.price)}</b> ${cuando} (${fDay(s.paid_until)}). Realiza el pago para no perder el acceso.</span>`;
+  return `${ic('bell')}<span>Tu mensualidad de <b>${moneyC(s.price, s.currency)}</b> ${cuando} (${fDay(s.paid_until)}). Realiza el pago para no perder el acceso.</span>`;
 }
 
 /* acciones por delegacion (evita handlers inline) */
@@ -780,7 +787,6 @@ VIEWS.resumen = el => {
   const mine = r => adm || r.seller_id === S.me.id;
   const ap = S.appts.filter(a => mine(a) && inP(a.event_date));
   const sa = S.sales.filter(s => mine(s) && inP(s.created_at));
-  const rf = S.refs.filter(r => mine(r) && inP(r.created_at));
   const dl = S.deliveries.filter(d => mine(d) && inP(d.delivered_at || d.created_at));
   const total = sum(sa, s => s.amount), net = sum(sa, netOf), sellerComm = sum(sa, s => s.commission_amount);
   const adminComm = net * ADMIN_PCT / 100;
@@ -804,10 +810,11 @@ VIEWS.resumen = el => {
       ${k('Total vendido', money(total), 'dollar', 'b')}
       ${adm ? k(`Mi comisión (${ADMIN_PCT}%)`, money(adminComm), 'dollar', 'g') + k('Comisión emprendedores', money(sellerComm), 'dollar') : k('Mi comisión', money(sellerComm), 'dollar', 'g')}
       ${k('Conversión', conv + '%', 'chart')}
-      ${k('Referidos', rf.length, 'share', '', adm ? 'referidos' : '')}
+      ${k('Referidos', sum(ap, refCount), 'share', '', adm ? 'referidos' : '')}
       ${adm ? k('Obsequios entregados', sum(dl, d => d.quantity), 'gift', '', 'obsequios') : k('Obsequios disponibles', gifts.available, 'gift')}
       ${adm ? k('Emprendedores activos', S.team.filter(t => t.status === 'activo' && t.role !== 'admin').length, 'users') : ''}
     </div>
+    ${(() => { const n = isMgr() ? S.appts.filter(a => a.delete_reason).length : 0; return n ? `<div class="del-card" style="margin-bottom:16px"><b>${n} solicitud(es) para eliminar citas</b> <button class="btn sm" data-act="goDelReqs" style="margin-left:8px">Revisar</button></div>` : ''; })()}
     ${!adm && ['goal_week', 'goal_biweek', 'goal_month'].some(c => Number(S.me[c]) > 0) ? `<div class="card" style="margin-bottom:16px"><h2>Mis metas de ventas</h2>${goalBars(S.me)}</div>` : ''}
     ${adm && pendingCount() ? `<div class="card" style="margin-bottom:16px;border-color:#FCD34D;background:var(--warn-soft)"><b>${pendingCount()} solicitud(es) pendiente(s)</b> en Equipo. <button class="btn sm" data-go2="equipo" style="margin-left:8px">Revisar</button></div>` : ''}
     <div class="grid cols2">
@@ -832,7 +839,7 @@ VIEWS.resumen = el => {
       options:{indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{ticks:{precision:0}}}}});
   } else {
     chart('cB', {type:'doughnut', data:{labels:Object.values(TYPES), datasets:[{data:Object.keys(TYPES).map(t => ap.filter(a => a.type === t).length), backgroundColor:PAL}]}, options:{plugins:{legend:{position:'bottom'}}}});
-    chart('cC', {type:'doughnut', data:{labels:Object.values(STATUS), datasets:[{data:Object.keys(STATUS).map(t => ap.filter(a => a.status === t).length), backgroundColor:[PAL[0], PAL[1], '#94A3B8', '#DC2626']}]}, options:{plugins:{legend:{position:'bottom'}}}});
+    chart('cC', {type:'doughnut', data:{labels:Object.values(STATUS), datasets:[{data:Object.keys(STATUS).map(t => ap.filter(a => a.status === t).length), backgroundColor:[PAL[0], PAL[2], PAL[1], '#94A3B8', '#DC2626']}]}, options:{plugins:{legend:{position:'bottom'}}}});
   }
 };
 ACT.copyCode = () => navigator.clipboard?.writeText(S.group.code).then(() => toast('Código copiado'), () => toast(S.group.code));
@@ -844,14 +851,14 @@ const startOfWeek = d => { const x = new Date(d); x.setDate(x.getDate() - ((x.ge
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 function filteredAppts() {
   const {seller, type, status, q: text} = S.f, t = text.trim().toLowerCase();
-  return S.appts.filter(a => (!seller || a.seller_id === seller) && (!type || a.type === type) && (!status || a.status === status)
+  return S.appts.filter(a => (!seller || a.seller_id === seller) && (!type || a.type === type) && (!status || (status === 'eliminacion' ? !!a.delete_reason : a.status === status))
     && (!t || [a.client_name, a.address, a.phone, a.notes].some(v => (v || '').toLowerCase().includes(t))));
 }
 function apptCard(a) {
   return `<button class="appt ${a.status}" style="--c:${colorOf(a.seller_id)}" data-act="openAppt" data-id="${a.id}">
     <div class="t">${fTime(a.event_date)}<div class="small muted" style="font-family:var(--font)">${fDate(a.event_date)}</div></div>
     <div><b>${esc(a.client_name)}</b><div class="small muted">${esc(a.address || 'Sin dirección')}${isMgr() ? ' · ' + esc(person(a.seller_id)) : ''}</div></div>
-    <div><span class="pill blue">${TYPES[a.type]}</span> <span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>${a.completed_at ? ' <span class="pill green">✓ Completada</span>' : ''}</div></button>`;
+    <div><span class="pill blue">${TYPES[a.type]}</span> <span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>${a.completed_at ? ' <span class="pill green">✓ Completada</span>' : ''}${a.delete_reason ? ' <span class="pill red">Eliminación pendiente</span>' : ''}</div></button>`;
 }
 VIEWS.agenda = el => {
   el.innerHTML = `
@@ -861,7 +868,7 @@ VIEWS.agenda = el => {
       <input class="grow" id="fq" type="search" placeholder="Buscar cliente, dirección o teléfono" value="${esc(S.f.q)}" aria-label="Buscar">
       ${isMgr() ? `<select id="fs" aria-label="Emprendedor"><option value="">Todos los emprendedores</option>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select>` : ''}
       <select id="ft" aria-label="Tipo"><option value="">Todos los tipos</option>${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
-      <select id="fst" aria-label="Estado"><option value="">Todos los estados</option>${Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <select id="fst" aria-label="Estado"><option value="">Todos los estados</option>${Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}${isMgr() ? '<option value="eliminacion">Eliminación pendiente</option>' : ''}</select>
     </div>
     ${isMgr() ? `<div class="legend" aria-label="Colores por emprendedor">${sellers().filter(p => p.role !== 'admin' || p.id === S.me.id).map(p => `<span><i class="dot" style="--c:${colorOf(p.id)}"></i>${esc(p.id === S.me.id ? 'Yo' : p.full_name)}</span>`).join('')}</div>` : ''}
     <div class="calhead">
@@ -960,10 +967,29 @@ ACT.openAppt = d => apptDetail(d.id);
 function apptDetail(id) {
   const a = apptOf(id); if (!a) return;
   $$('.ov').forEach(o => o.close?.());
-  const sale = saleOf(a.id), refs = S.refs.filter(r => r.appointment_id === a.id), dels = S.deliveries.filter(x => x.appointment_id === a.id);
+  const sale = saleOf(a.id), legacy = S.refs.filter(r => r.appointment_id === a.id), nRef = refCount(a), dels = S.deliveries.filter(x => x.appointment_id === a.id);
   const own = a.seller_id === S.me.id, canEdit = isMgr() || own, canWork = own || isAdmin();   // el agendador gestiona la agenda, pero no las ventas ajenas
+  const open = a.status === 'pendiente' || a.status === 'en_proceso', delPending = !!a.delete_reason;
+  const b = (act, label, cls = '', ico = '', extra = '') => `<button class="btn ${cls}" data-act="${act}" data-id="${a.id}" ${extra}>${ico ? ic(ico) + ' ' : ''}${label}</button>`;
+  const primary = [
+    canWork && !sale ? b('markSale', 'Marcar venta', 'green', 'dollar') : '',
+    canWork ? b('addRef', 'Referidos' + (nRef ? ` (${nRef})` : ''), '', 'share') : '',
+    canWork && open ? b('inProcess', 'Venta en proceso', '', 'clock') : '',
+    canWork && open ? b('setStatus', 'Sin venta', '', '', 'data-s="sin_venta"') : ''
+  ].filter(Boolean);
+  const more = [
+    canWork && a.status !== 'cancelada' ? (a.completed_at ? b('undoDone', 'Quitar completada') : b('doneAppt', 'Marcar completada', 'green', 'check')) : '',
+    own ? `<button class="btn" data-act="newDelivery" data-appt="${a.id}">${ic('gift')} Obsequio entregado</button>` : '',
+    a.status !== 'pendiente' && !sale ? b('setStatus', 'Reabrir', '', '', 'data-s="pendiente"') : '',
+    a.status !== 'cancelada' && !sale ? b('setStatus', 'Cancelar cita', '', '', 'data-s="cancelada"') : '',
+    canEdit ? b('editAppt', 'Editar', '', 'edit') : '',
+    canEdit && !delPending ? b('delAppt', isMgr() ? 'Eliminar' : 'Solicitar eliminación', 'danger', 'trash') : ''
+  ].filter(Boolean);
   const m = modal('Detalle de la cita', `
     ${a.completed_at ? `<div class="done-banner"><span class="tick-c">${ic('check')}</span><div><b>¡Cita completada!</b><div class="small">${fDT(a.completed_at)}${a.completed_by ? ' · ' + esc(person(a.completed_by)) : ''}</div></div></div>` : ''}
+    ${delPending ? `<div class="del-card"><b>${isMgr() ? 'Solicitud para eliminar esta cita' : 'Pediste eliminar esta cita'}</b>
+      <div class="small" style="margin:4px 0 8px">${a.delete_requested_by ? esc(person(a.delete_requested_by)) + ' · ' : ''}${a.delete_requested_at ? fDT(a.delete_requested_at) : ''}<br>Motivo: ${esc(a.delete_reason)}</div>
+      <div class="actions">${isMgr() ? `${b('approveDel', 'Aprobar y eliminar', 'danger', 'trash')}${b('rejectDel', 'Rechazar', '', 'x')}` : `<span class="pill warn">Esperando la aprobación del administrador</span>${b('cancelDel', 'Cancelar solicitud', 'sm')}`}</div></div>` : ''}
     <dl class="kv">
       <dt>Cliente</dt><dd><b>${esc(a.client_name)}</b></dd>
       <dt>Fecha</dt><dd>${fDT(a.event_date)}</dd>
@@ -973,28 +999,71 @@ function apptDetail(id) {
       <dt>Estado</dt><dd><span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span></dd>
       <dt>Emprendedor</dt><dd>${esc(person(a.seller_id))}</dd>
       <dt>Creada por</dt><dd>${a.created_by === S.me.id ? 'Tú' : a.created_by ? (isMgr() ? esc(person(a.created_by)) : 'Tu administrador / agendador') : '—'}</dd>
+      ${nRef ? `<dt>Referidos</dt><dd><b>${nRef}</b>${legacy.length ? ` <span class="small muted">(${legacy.map(r => esc(r.name)).join(', ')})</span>` : ''}</dd>` : ''}
       ${a.notes ? `<dt>Notas</dt><dd>${esc(a.notes)}</dd>` : ''}
     </dl>
+    ${a.process_note ? `<div class="note-card"><b>Nota de la venta en proceso</b>
+      <div style="margin:4px 0;white-space:pre-wrap">${esc(a.process_note)}</div>
+      <div class="small muted">${a.process_at ? fDT(a.process_at) : ''}${a.process_by ? ' · ' + esc(person(a.process_by)) : ''}</div>
+      ${canWork && a.status === 'en_proceso' ? `<div class="actions" style="margin-top:8px">${b('inProcess', 'Editar nota', 'sm', 'edit')}</div>` : ''}</div>` : ''}
     ${sale ? `<div class="card" style="background:var(--accent-soft);border-color:#A7E3CB;margin-bottom:12px"><b>Venta registrada</b>
       <div class="mono" style="font-size:20px;margin:4px 0">${money(sale.amount)}</div>
       <div class="small muted">Sin IVA: ${money(netOf(sale))}</div>
       <div class="small">Comisión (${sale.commission_pct}%): <b>${money(sale.commission_amount)}</b></div>
       ${sale.notes ? `<div class="small muted" style="margin-top:4px">${esc(sale.notes)}</div>` : ''}
       ${canWork ? `<div class="actions" style="margin-top:8px"><button class="btn sm" data-act="editSale" data-id="${sale.id}">${ic('edit')} Editar venta</button></div>` : ''}</div>` : ''}
-    ${refs.length ? `<div style="margin-bottom:12px"><b>Referidos (${refs.length})</b>${refs.map(r => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${esc(r.name)}</b> <span class="muted small">${esc(r.phone || '')}</span><div class="small muted">${esc(r.address || '')} ${r.notes ? '· ' + esc(r.notes) : ''}</div></div>`).join('')}</div>` : ''}
     ${dels.length ? `<div style="margin-bottom:12px"><b>Obsequios entregados (${sum(dels, x => x.quantity)})</b>${dels.map(x => `<div class="card" style="padding:10px 12px;margin-top:6px"><b>${x.quantity} × ${esc(x.gift_name)}</b> <span class="muted small">· ${fDay(x.delivered_at || x.created_at)}</span><div class="small muted">Para ${esc(x.recipient_name)} · ${esc(x.reason)}</div></div>`).join('')}</div>` : ''}
-    ${canEdit ? `<div class="mf" style="justify-content:flex-start">
-      ${canWork && a.status !== 'cancelada' ? (a.completed_at ? `<button class="btn" data-act="undoDone" data-id="${a.id}">Quitar completada</button>` : `<button class="btn green" data-act="doneAppt" data-id="${a.id}">${ic('check')} Marcar completada</button>`) : ''}
-      ${canWork && !sale ? `<button class="btn green" data-act="markSale" data-id="${a.id}">${ic('dollar')} Marcar venta</button>` : ''}
-      ${canWork ? `<button class="btn" data-act="addRef" data-id="${a.id}">${ic('plus')} Referidos</button>` : ''}
-      ${own ? `<button class="btn" data-act="newDelivery" data-appt="${a.id}">${ic('gift')} Obsequio entregado</button>` : ''}
-      ${canWork && a.status === 'pendiente' ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="sin_venta">Sin venta</button>` : ''}
-      ${a.status !== 'pendiente' && !sale ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="pendiente">Reabrir</button>` : ''}
-      ${a.status !== 'cancelada' && !sale ? `<button class="btn" data-act="setStatus" data-id="${a.id}" data-s="cancelada">Cancelar cita</button>` : ''}
-      <button class="btn" data-act="editAppt" data-id="${a.id}">${ic('edit')} Editar</button>
-      <button class="btn danger" data-act="delAppt" data-id="${a.id}">${ic('trash')}</button></div>` : ''}`, {wide:true});
+    ${canEdit ? `<div class="mf" style="justify-content:flex-start">${primary.join('')}
+      ${more.length ? `<button class="btn" data-act="toggleMore" aria-expanded="${primary.length ? 'false' : 'true'}" aria-controls="moreOpts">${primary.length ? ic('plus') + ' Más opciones' : ic('x') + ' Menos opciones'}</button>` : ''}</div>
+      ${more.length ? `<div class="mf" id="moreOpts" style="justify-content:flex-start;margin-top:0" ${primary.length ? 'hidden' : ''}>${more.join('')}</div>` : ''}` : ''}`, {wide:true});
   return m;
 }
+ACT.toggleMore = (d, btn) => {
+  const box = $('#moreOpts'); if (!box) return;
+  box.hidden = !box.hidden; btn.setAttribute('aria-expanded', String(!box.hidden));
+  btn.innerHTML = box.hidden ? `${ic('plus')} Más opciones` : `${ic('x')} Menos opciones`;
+};
+ACT.goDelReqs = () => { S.f.status = 'eliminacion'; S.cal.mode = 'lista'; go('agenda'); };
+
+/* ---- venta en proceso (con nota) ---- */
+ACT.inProcess = d => processForm(apptOf(d.id));
+function processForm(a) {
+  $$('.ov').forEach(o => o.close?.());
+  const m = modal('Venta en proceso', `<p class="muted small" style="margin-top:0">Cliente: <b>${esc(a.client_name)}</b>. Cuéntale a tu administrador en qué quedó el proceso de cierre. Tú también podrás ver esta nota después para recordarlo.</p><form id="fPr">
+    <label class="f"><span>¿En qué quedó el proceso? *</span><textarea name="note" required maxlength="1000" rows="5" placeholder="Ej: El cliente quedó de confirmar el viernes; le llamo el sábado en la mañana.">${esc(a.process_note)}</textarea></label>
+    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">Guardar nota</button></div></form>`);
+  $('#fPr', m).onsubmit = e => {
+    e.preventDefault(); const note = new FormData(e.target).get('note').trim();
+    run(async () => {
+      await q(sb.from('appointments').update({status:'en_proceso', process_note:note}).eq('id', a.id));
+      m.close(); toast('Venta en proceso guardada. Tu administrador ya puede ver la nota.'); await loadAll(); render(); apptDetail(a.id);
+    }, $('button[type=submit]', m));
+  };
+}
+
+/* ---- eliminar una cita: el emprendedor la solicita, admin o agendador la aprueban ---- */
+ACT.delAppt = d => {
+  const a = apptOf(d.id); if (!a) return;
+  if (isMgr()) return ACT.approveDel(d);
+  $$('.ov').forEach(o => o.close?.());
+  const m = modal('Solicitar eliminar la cita', `<p class="muted small" style="margin-top:0">Cita con <b>${esc(a.client_name)}</b>. Tu administrador y el agendador recibirán la solicitud y uno de ellos debe aprobarla.</p><form id="fDl">
+    <label class="f"><span>¿Por qué quieres eliminarla? *</span><textarea name="why" required maxlength="500" rows="4"></textarea></label>
+    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn danger" type="submit">Enviar solicitud</button></div></form>`);
+  $('#fDl', m).onsubmit = e => {
+    e.preventDefault(); const why = new FormData(e.target).get('why').trim();
+    run(async () => {
+      await q(sb.from('appointments').update({delete_reason:why}).eq('id', a.id));
+      m.close(); toast('Solicitud enviada. Se avisó al administrador y al agendador.'); await loadAll(); render(); apptDetail(a.id);
+    }, $('button[type=submit]', m));
+  };
+};
+ACT.approveDel = async d => {
+  const a = apptOf(d.id);
+  if (!await confirmDlg(`¿Eliminar la cita con ${a?.client_name}? También se borrarán su venta y sus datos. No se puede deshacer.`, 'Eliminar cita')) return;
+  run(async () => { await q(sb.from('appointments').delete().eq('id', d.id)); $$('.ov').forEach(o => o.close?.()); toast('Cita eliminada'); await loadAll(); render(); });
+};
+ACT.rejectDel = d => run(async () => { await q(sb.from('appointments').update({delete_reason:null}).eq('id', d.id)); toast('Solicitud rechazada. Se avisó al emprendedor.'); await loadAll(); render(); apptDetail(d.id); });
+ACT.cancelDel = d => run(async () => { await q(sb.from('appointments').update({delete_reason:null}).eq('id', d.id)); toast('Solicitud cancelada'); await loadAll(); render(); apptDetail(d.id); });
 ACT.doneAppt = d => run(async () => {
   await q(sb.from('appointments').update({completed_at:new Date().toISOString()}).eq('id', d.id));
   toast('¡Cita completada! Se avisó al administrador.'); await loadAll(); render(); apptDetail(d.id);
@@ -1004,10 +1073,6 @@ ACT.undoDone = d => run(async () => {
   await loadAll(); render(); apptDetail(d.id);
 });
 ACT.editAppt = d => { $$('.ov').forEach(o => o.close?.()); apptForm(apptOf(d.id)); };
-ACT.delAppt = async d => {
-  if (!await confirmDlg('¿Eliminar esta cita? También se borrarán su venta y sus referidos.', 'Eliminar')) return;
-  run(async () => { await q(sb.from('appointments').delete().eq('id', d.id)); $$('.ov').forEach(o => o.close?.()); toast('Cita eliminada'); await loadAll(); render(); });
-};
 ACT.setStatus = d => run(async () => {
   await q(sb.from('appointments').update({status:d.s}).eq('id', d.id));
   await loadAll(); render(); apptDetail(d.id);
@@ -1042,46 +1107,46 @@ function saleForm(a, sale) {
   };
 }
 
-/* ---- referidos ---- */
-ACT.addRef = d => refForm(apptOf(d.id));
-ACT.editRef = d => { const r = S.refs.find(x => x.id === d.id); refForm(apptOf(r.appointment_id), r); };
-function refForm(a, ref) {
+/* ---- referidos: solo el numero que dio el cliente (y, si quiere, el obsequio) ---- */
+ACT.addRef = d => refsModal(apptOf(d.id));
+function refsModal(a) {
   $$('.ov').forEach(o => o.close?.());
-  const m = modal(ref ? 'Editar referido' : '+ Referidos', `<p class="muted small" style="margin-top:0">Cita de: <b>${esc(a.client_name)}</b></p><form id="fR">
-    <label class="f"><span>Nombre del referido *</span><input name="name" required value="${esc(ref?.name)}"></label>
-    <div class="row2"><label class="f"><span>Teléfono</span><input name="phone" type="tel" value="${esc(ref?.phone)}"></label>
-    <label class="f"><span>Dirección</span><input name="address" value="${esc(ref?.address)}"></label></div>
-    <label class="f"><span>Observaciones</span><textarea name="notes">${esc(ref?.notes)}</textarea></label>
-    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button>
-    ${ref ? '' : '<button class="btn" type="submit" data-more="1">Guardar y agregar otro</button>'}<button class="btn primary" type="submit">Guardar</button></div></form>`);
-  let more = false;
-  $$('button[type=submit]', m).forEach(b => b.onclick = () => { more = !!b.dataset.more; });
-  $('#fR', m).onsubmit = e => {
-    e.preventDefault();
-    const f = new FormData(e.target);
+  const cur = refCount(a), own = a.seller_id === S.me.id, stock = own ? giftBreakdown(S.me.id).filter(g => g.available > 0) : [];
+  const m = modal('Referidos', `<p class="muted small" style="margin-top:0">Cita de: <b>${esc(a.client_name)}</b></p><form id="fRf">
+    <label class="f"><span>Número total de referidos que dio el cliente *</span><input name="n" type="number" min="1" max="99" step="1" required value="${cur || 1}"></label>
+    ${own ? (stock.length ? `<label style="display:flex;gap:8px;align-items:center;margin:2px 0 10px;font-weight:500"><input type="checkbox" id="giftChk" style="width:auto;min-height:0"> Le entregué un obsequio al cliente (opcional)</label>
+      <div id="giftBox" hidden><div class="row2"><label class="f"><span>Obsequio</span><select name="gift">${stock.map(g => `<option value="${esc(g.name)}" data-max="${g.available}">${esc(g.name)} (disp. ${g.available})</option>`).join('')}</select></label>
+      <label class="f"><span>Cantidad</span><input name="qty" type="number" min="1" max="${stock[0].available}" value="1"></label></div></div>`
+      : '<p class="hint">No tienes obsequios disponibles para registrar una entrega.</p>') : ''}
+    <div class="remind">${ic('bell')}<span><b>Recuerda:</b> envía la imagen de los referidos al agendador o al administrador.</span></div>
+    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></form>`);
+  const chk = $('#giftChk', m);
+  if (chk) {
+    chk.onchange = () => { $('#giftBox', m).hidden = !chk.checked; };
+    const sel = $('[name=gift]', m), qty = $('[name=qty]', m);
+    sel.onchange = () => { qty.max = sel.selectedOptions[0].dataset.max; if (Number(qty.value) > Number(qty.max)) qty.value = qty.max; };
+  }
+  $('#fRf', m).onsubmit = e => {
+    e.preventDefault(); const f = new FormData(e.target), n = Math.max(1, Math.round(Number(f.get('n')) || 1));
     run(async () => {
-      const p = {name:f.get('name').trim(), phone:f.get('phone').trim() || null, address:f.get('address').trim() || null, notes:f.get('notes').trim() || null};
-      if (ref) await q(sb.from('referrals').update(p).eq('id', ref.id));
-      else {
-        await q(sb.from('referrals').insert({...p, group_id:S.me.group_id, appointment_id:a.id, seller_id:a.seller_id || S.me.id}));
-        if (a.status === 'pendiente') await q(sb.from('appointments').update({status:'sin_venta'}).eq('id', a.id));
-      }
-      m.close(); toast('Referido guardado'); await loadAll(); render();
-      if (more) refForm(apptOf(a.id));
-    });
+      await q(sb.from('appointments').update({referrals_count:n}).eq('id', a.id));
+      if (chk?.checked) await q(sb.from('gift_deliveries').insert({group_id:S.me.group_id, seller_id:S.me.id, appointment_id:a.id, gift_name:f.get('gift'),
+        quantity:Number(f.get('qty')) || 1, delivered_at:toInput(new Date()).slice(0, 10), recipient_name:a.client_name, recipient_contact:a.phone || null, reason:'Obsequio por referidos'}));
+      m.close(); toast(`Registraste ${n} referido(s). Se avisó al agendador y al administrador.`); await loadAll(); render(); apptDetail(a.id);
+    }, $('button[type=submit]', m));
   };
 }
 VIEWS.referidos = el => {
-  const sel = S.f.rseller || '';
-  const list = S.refs.filter(r => !sel || r.seller_id === sel);
-  el.innerHTML = `<div class="pagehead"><div class="grow"><div class="small muted">Personas que te recomendaron tus clientes. Para agregar uno, abre una cita y pulsa "+ Referidos".</div></div></div>
-    ${isAdmin() ? `<div class="toolbar"><select id="rs" aria-label="Emprendedor"><option value="">Todos los emprendedores</option>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></div>` : ''}
-    ${list.length ? `<div class="tw"><table><thead><tr><th>Referido</th><th>Teléfono</th><th>Dirección</th><th>Referido por (cliente)</th>${isAdmin() ? '<th>Emprendedor</th>' : ''}<th>Fecha</th><th></th></tr></thead><tbody>
-    ${list.map(r => `<tr><td><b>${esc(r.name)}</b><div class="small muted">${esc(r.notes || '')}</div></td><td>${esc(r.phone || '—')}</td><td>${esc(r.address || '—')}</td><td>${esc(apptOf(r.appointment_id)?.client_name || '—')}</td>${isAdmin() ? `<td>${esc(person(r.seller_id))}</td>` : ''}<td>${fDate(r.created_at)}</td>
-    <td><div class="actions"><button class="btn sm icon" data-act="editRef" data-id="${r.id}" aria-label="Editar">${ic('edit')}</button><button class="btn sm icon danger" data-act="delRef" data-id="${r.id}" aria-label="Eliminar">${ic('trash')}</button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aún no hay referidos.</div>'}`;
+  const adm = isAdmin(), sel = S.f.rseller || '';
+  const list = S.appts.filter(a => refCount(a) > 0 && (adm || a.seller_id === S.me.id) && (!sel || a.seller_id === sel)).sort((x, y) => new Date(y.event_date) - new Date(x.event_date));
+  el.innerHTML = `<div class="grid kpis"><div class="card kpi"><div class="l">${ic('users')}Clientes que dieron referidos</div><div class="v">${list.length}</div></div>
+      <div class="card kpi g"><div class="l">${ic('share')}Total de referidos</div><div class="v">${sum(list, refCount)}</div></div></div>
+    ${adm ? `<div class="toolbar"><select id="rs" aria-label="Emprendedor"><option value="">Todos los emprendedores</option>${sellers().map(p => `<option value="${p.id}">${esc(p.full_name)}</option>`).join('')}</select></div>` : ''}
+    ${list.length ? `<div class="tw"><table><thead><tr><th>Cliente</th><th class="num">Referidos</th><th>Fecha de la cita</th>${adm ? '<th>Emprendedor</th>' : ''}</tr></thead><tbody>
+    ${list.map(a => `<tr class="click" data-act="openAppt" data-id="${a.id}"><td><b>${esc(a.client_name)}</b></td><td class="num"><span class="bignum">${refCount(a)}</span></td><td>${fDate(a.event_date)}</td>${adm ? `<td>${esc(person(a.seller_id))}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
+    : '<div class="card empty">Todavía no hay referidos. Abre una cita y pulsa "Referidos" para registrar cuántos dio el cliente.</div>'}`;
   const s = $('#rs'); if (s) { s.value = sel; s.onchange = e => { S.f.rseller = e.target.value; render(); }; }
 };
-ACT.delRef = async d => { if (await confirmDlg('¿Eliminar este referido?', 'Eliminar')) run(async () => { await q(sb.from('referrals').delete().eq('id', d.id)); await loadAll(); render(); }); };
 
 /* =====================================================================
    Ventas
@@ -1284,7 +1349,7 @@ VIEWS.notificaciones = el => {
   el.innerHTML = `<div class="pagehead"><div class="grow"><div class="small muted">${unread()} sin leer</div></div>
     <button class="btn" data-act="readAll" ${unread() ? '' : 'disabled'}>${ic('check')} Marcar todas como leídas</button></div>
     ${S.notifs.length ? S.notifs.map(n => `<button class="notif ${n.read ? '' : 'unread'}" data-act="readOne" data-id="${n.id}">
-      <span style="color:var(--primary)">${ic({solicitud:'users', baja:'user', obsequio:'gift', agenda:'calendar', mensaje:'send', completada:'check', foto:'user', pago:'dollar', comision:'dollar', cargo:'user'}[n.type] || 'bell')}</span>
+      <span style="color:var(--primary)">${ic({solicitud:'users', baja:'user', obsequio:'gift', agenda:'calendar', mensaje:'send', proceso:'clock', eliminacion:'trash', referidos:'share', completada:'check', foto:'user', pago:'dollar', comision:'dollar', cargo:'user'}[n.type] || 'bell')}</span>
       <span style="flex:1"><b>${esc(n.title)}</b><div class="small">${esc(n.body || '')}</div><div class="small muted">${fDT(n.created_at)}</div></span></button>`).join('') : '<div class="card empty">No tienes notificaciones.</div>'}`;
 };
 ACT.readOne = d => run(async () => {
@@ -1303,14 +1368,14 @@ VIEWS.perfil = el => {
     const sent = sum(S.assigns.filter(a => a.status === 'aceptado'), a => a.quantity), deliv = sum(S.deliveries, d => d.quantity);
     rows = row('Cargo', `<span class="pill blue">${ROLES[me.role]}</span>`) + row('Grupo', esc(S.group?.name || '—'))
       + row('Código del grupo', `<span class="code">${esc(S.group?.code || '')}</span>`)
-      + (S.sub?.paid_until ? row('Mensualidad', `${money(S.sub.price)} · vence el ${fDay(S.sub.paid_until)}`) : '')
+      + (S.sub?.paid_until ? row('Mensualidad', `${moneyC(S.sub.price, S.sub.currency)} · vence el ${fDay(S.sub.paid_until)}`) : '')
       + row('Emprendedores activos', S.team.filter(t => t.status === 'activo' && t.role !== 'admin').length)
       + row('Citas del grupo', S.appts.length)
       + row('Ventas del grupo', `${S.sales.length} · ${money(total)}`)
       + row('Ventas sin IVA (÷ 1,19)', money(net)) + row('IVA (19%)', money(total - net))
       + row(`Mi comisión (${ADMIN_PCT}%)`, `<b>${money(net * ADMIN_PCT / 100)}</b>`)
       + row('Comisiones de emprendedores', money(comm))
-      + row('Referidos', S.refs.length)
+      + row('Referidos', sum(S.appts, refCount))
       + row('Obsequios', `${sent} aceptados · ${deliv} entregados`);
   } else {
     const mySales = S.sales.filter(s => s.seller_id === me.id);
@@ -1362,7 +1427,7 @@ ACT.reqDelete = async () => {
 const HIST = {
   citas:{title:'Historial de citas', col:'Cliente', noun:'cita', ref:'appointment'},
   ventas:{title:'Historial de ventas', col:'Cliente', noun:'venta', ref:'sale'},
-  referidos:{title:'Historial de referidos', col:'Referido', noun:'referido', ref:'referral'},
+  referidos:{title:'Historial de referidos', col:'Cliente', noun:'registro de referidos', ref:'appointment'},
   obsequios:{title:'Historial de obsequios', col:'Entregado a', noun:'entrega de obsequio', ref:'delivery'}
 };
 function histItems(kind) {
@@ -1372,7 +1437,7 @@ function histItems(kind) {
   let l = [];
   if (kind === 'citas') l = S.appts.filter(a => inP(a.event_date)).map(a => ({id:a.id, seller:a.seller_id, date:a.event_date, name:a.client_name, sub:TYPES[a.type]}));
   if (kind === 'ventas') l = S.sales.filter(s => inP(s.created_at)).map(s => ({id:s.id, seller:s.seller_id, date:s.created_at, name:apptOf(s.appointment_id)?.client_name || '—', sub:money(s.amount)}));
-  if (kind === 'referidos') l = S.refs.filter(r => inP(r.created_at)).map(r => ({id:r.id, seller:r.seller_id, date:r.created_at, name:r.name, sub:'de ' + (apptOf(r.appointment_id)?.client_name || '—')}));
+  if (kind === 'referidos') l = S.appts.filter(a => inP(a.event_date) && refCount(a) > 0).map(a => ({id:a.id, seller:a.seller_id, date:a.event_date, name:a.client_name, sub:`${refCount(a)} referido(s)`}));
   if (kind === 'obsequios') l = S.deliveries.filter(d => inP(d.delivered_at || d.created_at)).map(d => ({id:d.id, seller:d.seller_id, date:d.delivered_at ? d.delivered_at + 'T12:00:00' : d.created_at, name:d.recipient_name, sub:`${d.quantity} × ${d.gift_name}`}));
   return l.sort(byDate);
 }
@@ -1420,12 +1485,12 @@ function histDetail(kind, id, fromList) {
       + (v.notes ? kv('Observaciones', esc(v.notes)) : '');
     extra = seeAppt(v.appointment_id);
   } else if (kind === 'referidos') {
-    const r = S.refs.find(x => x.id === id); if (!r) return null;
-    seller = r.seller_id; title = 'Detalle del referido';
-    rows = kv('Referido', `<b>${esc(r.name)}</b>`) + kv('Teléfono', esc(r.phone || '—')) + kv('Dirección', esc(r.address || '—'))
-      + (r.notes ? kv('Observaciones', esc(r.notes)) : '') + kv('Referido por (cliente)', esc(apptOf(r.appointment_id)?.client_name || '—'))
-      + kv('Emprendedor', esc(person(r.seller_id))) + kv('Fecha', fDT(r.created_at));
-    extra = seeAppt(r.appointment_id);
+    const a = apptOf(id); if (!a) return null;
+    const dl = S.deliveries.filter(x => x.appointment_id === a.id);
+    seller = a.seller_id; title = 'Detalle de los referidos';
+    rows = kv('Cliente', `<b>${esc(a.client_name)}</b>`) + kv('Número de referidos', `<b>${refCount(a)}</b>`) + kv('Fecha de la cita', fDT(a.event_date))
+      + kv('Emprendedor', esc(person(a.seller_id))) + kv('Obsequios entregados', dl.length ? dl.map(x => `${x.quantity} × ${esc(x.gift_name)}`).join(', ') : 'Ninguno');
+    extra = seeAppt(a.id).replace('Ver cita', 'Abrir cita completa');
   } else {
     const d = S.deliveries.find(x => x.id === id); if (!d) return null;
     seller = d.seller_id; title = 'Detalle de la entrega';
@@ -1673,13 +1738,13 @@ function empDetail(id, tab) {
   const p = S.team.find(t => t.id === id); if (!p) return;
   $$('.ov').forEach(o => o.close?.());
   const sales = S.sales.filter(x => x.seller_id === id), appts = S.appts.filter(a => a.seller_id === id);
-  const refs = S.refs.filter(r => r.seller_id === id), dels = S.deliveries.filter(x => x.seller_id === id);
+  const refs = appts.filter(a => refCount(a) > 0), dels = S.deliveries.filter(x => x.seller_id === id);
   const tabs = [['ventas', 'Ventas', sales.length], ['agendas', 'Agendas', appts.length], ['referidos', 'Referidos', refs.length], ['obsequios', 'Obsequios', dels.length]];
   const tbl = (head, rows) => rows.length ? `<div class="tw"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : '<div class="empty">Sin registros.</div>';
   let body = '';
   if (tab === 'ventas') body = tbl(['Fecha', 'Cliente', 'Valor', 'Comisión'], sales.map(x => `<tr class="click" data-act="rowDetail" data-k="ventas" data-id="${x.id}"><td>${fDate(x.created_at)}</td><td>${esc(apptOf(x.appointment_id)?.client_name || '—')}</td><td>${money(x.amount)}</td><td>${money(x.commission_amount)}</td></tr>`));
   if (tab === 'agendas') body = tbl(['Fecha', 'Cliente', 'Tipo', 'Estado'], appts.map(a => `<tr class="click" data-act="openAppt" data-id="${a.id}"><td>${fDT(a.event_date)}</td><td>${esc(a.client_name)}</td><td>${TYPES[a.type]}</td><td><span class="pill ${STATUS_PILL[a.status]}">${STATUS[a.status]}</span>${a.completed_at ? ' <span class="pill green">✓ Completada</span>' : ''}</td></tr>`));
-  if (tab === 'referidos') body = tbl(['Fecha', 'Referido', 'Teléfono', 'De (cliente)'], refs.map(r => `<tr class="click" data-act="rowDetail" data-k="referidos" data-id="${r.id}"><td>${fDate(r.created_at)}</td><td>${esc(r.name)}</td><td>${esc(r.phone || '—')}</td><td>${esc(apptOf(r.appointment_id)?.client_name || '—')}</td></tr>`));
+  if (tab === 'referidos') body = tbl(['Fecha', 'Cliente', 'Referidos'], refs.map(a => `<tr class="click" data-act="openAppt" data-id="${a.id}"><td>${fDate(a.event_date)}</td><td>${esc(a.client_name)}</td><td><b>${refCount(a)}</b></td></tr>`));
   if (tab === 'obsequios') body = tbl(['Entrega', 'Obsequio', 'Entregado a', 'Motivo'], byDelivery(dels).map(x => `<tr class="click" data-act="rowDetail" data-k="obsequios" data-id="${x.id}"><td>${fDay(x.delivered_at || x.created_at)}</td><td>${x.quantity} × ${esc(x.gift_name)}</td><td>${esc(x.recipient_name)}</td><td>${esc(x.reason)}</td></tr>`));
   const kp = (l, v) => `<div class="card kpi" style="padding:12px"><div class="l">${l}</div><div class="v" style="font-size:18px">${v}</div></div>`;
   modal(`Información de ${p.full_name}`, `

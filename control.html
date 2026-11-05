@@ -104,7 +104,8 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{stora
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const money = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0}).format(Number(n) || 0);
+const money = (n, cur = 'COP') => new Intl.NumberFormat('es-CO', {style:'currency', currency:cur === 'COP' ? 'COP' : 'USD', maximumFractionDigits:cur === 'COP' ? 0 : 2}).format(Number(n) || 0);
+const CURS = {USD:'Dólares (US$)', COP:'Pesos (COP)'};
 const fDay = d => new Date(String(d).slice(0, 10) + 'T00:00:00').toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
 const fDT = d => new Date(d).toLocaleString('es-CO', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
 const icons = {
@@ -216,19 +217,20 @@ function renderKpis() {
   const st = S.rows.map(statusOf), c = k => st.filter(x => x.k === k).length;
   const kp = (l, v, cls = '') => `<div class="card kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
   $('#kpis').innerHTML = kp('Administradores', S.rows.length) + kp('Nuevos sin pago', c('nuevo')) + kp('Al día', c('al_dia'), 'g') + kp('Por vencer', c('por_vencer'), 'w')
-    + kp('Vencidos o bloqueados', c('vencido') + c('bloqueado'), 'r') + kp('Total cobrado', money(S.rows.reduce((t, r) => t + Number(r.total_paid), 0)), 'g');
+    + kp('Vencidos o bloqueados', c('vencido') + c('bloqueado'), 'r') + kp('Total cobrado', [['USD', 'paid_usd'], ['COP', 'paid_cop']].map(([c, k]) => [c, S.rows.reduce((t, r) => t + Number(r[k]), 0)]).filter(([, v]) => v > 0).map(([c, v]) => money(v, c)).join(' · ') || money(0, 'USD'), 'g');
 }
 function renderSettings() {
   const s = S.settings;
   $('#cfg').innerHTML = `<h2 style="margin-bottom:12px">Mensualidad de los administradores</h2><form id="fCfg">
-    <div class="row3"><label class="f"><span>Valor mensual (COP) — igual para todos</span><input name="price" type="number" min="0" step="1" required value="${s.monthly_price}"></label>
+    <div class="row3" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))"><label class="f"><span>Valor mensual general (para todos)</span><input name="price" type="number" min="0" step="0.01" required value="${s.monthly_price}"></label>
+    <label class="f"><span>Moneda</span><select name="cur">${Object.entries(CURS).map(([k, v]) => `<option value="${k}" ${s.currency === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
     <label class="f"><span>Días de plazo para el primer pago</span><input name="first" type="number" min="0" step="1" required value="${s.first_payment_days}"></label>
     <label class="f"><span>Avisar al administrador (días antes)</span><input name="warn" type="number" min="0" step="1" required value="${s.warn_days}"></label></div>
-    <p class="hint">El nuevo valor se muestra a los administradores desde ahora. El plazo del primer pago solo aplica a registros nuevos.</p>
+    <p class="hint">Este valor aplica a todos los administradores que no tengan un precio personalizado (botón "Precio" en cada fila). El plazo del primer pago solo aplica a registros nuevos.</p>
     <button class="btn primary" type="submit">Guardar</button></form>`;
   $('#fCfg').onsubmit = e => {
     e.preventDefault(); const f = new FormData(e.target);
-    run(async () => { await q(sb.rpc('owner_update_settings', {p_price:Number(f.get('price')), p_first_days:Number(f.get('first')), p_warn_days:Number(f.get('warn'))}));
+    run(async () => { await q(sb.rpc('owner_update_settings', {p_price:Number(f.get('price')), p_first_days:Number(f.get('first')), p_warn_days:Number(f.get('warn')), p_currency:f.get('cur')}));
       await load(); renderApp2(); toast('Configuración guardada'); }, $('button', e.target));
   };
 }
@@ -244,11 +246,12 @@ function renderTable() {
         ${r.prev_admin_name ? `<div class="small" style="margin-top:4px"><span class="pill ${daysSince(r.admin_changed_at) <= 30 ? 'blue' : ''}">Cambio de administrador</span> <span class="muted">Antes: ${esc(r.prev_admin_name)} · ${fDay(r.admin_changed_at)}</span></div>` : ''}</td>
       <td>${esc(r.group_name)}<div class="small muted">${r.sellers} emprendedor(es)</div></td><td>${fDT(r.registered_at)}</td>
       <td>${fDay(r.paid_until)}<div class="small ${s.days < 0 ? '' : 'muted'}" style="${s.days < 0 ? 'color:var(--danger)' : ''}">${s.days < 0 ? `hace ${-s.days} día(s)` : s.days === 0 ? 'vence hoy' : `en ${s.days} día(s)`}</div></td>
-      <td class="num">${money(S.settings.monthly_price)}</td><td class="num">${money(r.total_paid)}<div class="small muted" style="font-family:var(--font)">${r.payments_count} pago(s)</div></td>
+      <td class="num">${money(r.price, r.currency)}${r.custom_price ? '<div style="font-family:var(--font)"><span class="pill blue">Personalizado</span></div>' : ''}</td>
+      <td class="num">${[['USD', r.paid_usd], ['COP', r.paid_cop]].filter(([, v]) => Number(v) > 0).map(([c, v]) => `<div>${money(v, c)}</div>`).join('') || money(0, r.currency)}<div class="small muted" style="font-family:var(--font)">${r.payments_count} pago(s)</div></td>
       <td><span class="pill ${s.pill}">${s.label}</span></td>
       <td><div class="actions"><button class="btn green sm" data-act="pay" data-g="${r.group_id}">${ic('check')} Registrar pago</button>
         <button class="btn sm ${r.blocked ? '' : 'danger'}" data-act="block" data-g="${r.group_id}" data-b="${r.blocked ? 0 : 1}">${r.blocked ? 'Desbloquear' : 'Bloquear'}</button>
-        <button class="btn sm" data-act="due" data-g="${r.group_id}">Vencimiento</button><button class="btn sm" data-act="hist" data-g="${r.group_id}">Historial</button></div></td></tr>`).join('')}
+        <button class="btn sm" data-act="price" data-g="${r.group_id}">Precio</button><button class="btn sm" data-act="due" data-g="${r.group_id}">Vencimiento</button><button class="btn sm" data-act="hist" data-g="${r.group_id}">Historial</button></div></td></tr>`).join('')}
     </tbody></table></div>` : '<div class="card empty">No hay administradores en este filtro.</div>';
 }
 
@@ -258,11 +261,11 @@ const rowOf = g => S.rows.find(r => r.group_id === g);
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const r = rowOf(b.dataset.g); if (!r) return;
-  ({pay, block, due, hist}[b.dataset.act])?.(r, b);
+  ({pay, block, due, hist, price:priceForm}[b.dataset.act])?.(r, b);
 });
 function pay(r) {
   const m = modal(`Registrar pago · ${r.group_name}`, `<p class="small muted" style="margin-top:0">Administrador: <b>${esc(r.admin_name)}</b>. Vence el ${fDay(r.paid_until)}.</p><form id="fP">
-    <div class="row2"><label class="f"><span>Valor recibido (COP)</span><input name="amount" type="number" min="0" step="1" required value="${S.settings.monthly_price}"></label>
+    <div class="row2"><label class="f"><span>Valor recibido (${r.currency})</span><input name="amount" type="number" min="0" step="0.01" required value="${r.price}"></label>
     <label class="f"><span>Meses que cubre</span><input name="months" type="number" min="1" max="24" step="1" required value="1"></label></div>
     <label class="f"><span>Nota (opcional)</span><input name="note" maxlength="120" placeholder="Transferencia, efectivo, referencia…"></label>
     <p class="hint">El nuevo vencimiento se cuenta desde la fecha actual de vencimiento (o desde hoy si ya venció). Se desbloquea al registrar el pago.</p>
@@ -278,6 +281,22 @@ async function block(r, b) {
   if (!await confirmDlg(on ? `¿Bloquear a ${r.admin_name}? No podrá entrar y verá el mensaje de pago. Sus emprendedores siguen trabajando.` : `¿Desbloquear a ${r.admin_name}?`, on ? 'Bloquear' : 'Desbloquear', on)) return;
   run(async () => { await q(sb.rpc('owner_set_blocked', {p_group:r.group_id, p_blocked:on})); await load(); renderApp2();
     toast(on ? 'Administrador bloqueado' : daysTo(r.paid_until) < 0 ? 'Desbloqueado, pero sigue vencido: registra el pago o cambia el vencimiento' : 'Administrador desbloqueado', false); });
+}
+function priceForm(r) {
+  const m = modal(`Precio de ${r.admin_name || r.group_name}`, `<p class="small muted" style="margin-top:0">Grupo: <b>${esc(r.group_name)}</b>. Precio general ahora: <b>${money(S.settings.monthly_price, S.settings.currency)}</b>.</p><form id="fPr">
+    <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-weight:500"><input type="radio" name="mode" value="general" style="width:auto;min-height:0" ${r.custom_price ? '' : 'checked'}> Usar el precio general</label>
+    <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-weight:500"><input type="radio" name="mode" value="custom" style="width:auto;min-height:0" ${r.custom_price ? 'checked' : ''}> Precio personalizado para este administrador</label>
+    <div class="row2" id="cust"><label class="f"><span>Valor mensual</span><input name="price" type="number" min="0" step="0.01" value="${r.custom_price ? r.price : ''}"></label>
+    <label class="f"><span>Moneda</span><select name="cur">${Object.entries(CURS).map(([k, v]) => `<option value="${k}" ${(r.custom_price ? r.currency : 'USD') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+    <p class="hint">Aplica desde ahora: es lo que este administrador verá como valor a pagar. Los pagos ya registrados no cambian.</p>
+    <div class="mf"><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></form>`);
+  const sync = () => { const c = $('[name=mode]:checked', m).value === 'custom'; $('#cust', m).style.opacity = c ? 1 : .45; $$('#cust input,#cust select', m).forEach(i => { i.disabled = !c; }); $('[name=price]', m).required = c; };
+  $$('[name=mode]', m).forEach(i => i.onchange = sync); sync();
+  $('#fPr', m).onsubmit = e => {
+    e.preventDefault(); const f = new FormData(e.target), custom = f.get('mode') === 'custom';
+    run(async () => { await q(sb.rpc('owner_set_price', {p_group:r.group_id, p_price:custom ? Number(f.get('price')) : null, p_currency:custom ? f.get('cur') : null}));
+      m.close(); await load(); renderApp2(); toast(custom ? 'Precio personalizado guardado' : 'Ahora usa el precio general'); }, $('button[type=submit]', m));
+  };
 }
 function due(r) {
   const m = modal(`Cambiar vencimiento · ${r.group_name}`, `<form id="fD"><label class="f"><span>Nueva fecha de vencimiento</span><input name="d" type="date" required value="${String(r.paid_until).slice(0, 10)}"></label>
@@ -295,7 +314,7 @@ function hist(r) {
     const changes = ch.length ? `<h3 style="margin:16px 0 8px">Cambios de administrador</h3><div class="tw"><table><thead><tr><th>Fecha</th><th>Antes</th><th>Ahora</th></tr></thead><tbody>
       ${ch.map(x => `<tr><td>${fDT(x.changed_at)}</td><td>${esc(x.old_admin_name || '—')}</td><td><b>${esc(x.new_admin_name || '—')}</b></td></tr>`).join('')}</tbody></table></div>` : '';
     $('.modal > div:last-child', m).innerHTML = (p.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th class="num">Valor</th><th>Cubre hasta</th><th>Nota</th></tr></thead><tbody>
-      ${p.map(x => `<tr><td>${fDT(x.paid_at)}</td><td class="num">${money(x.amount)}</td><td>${fDay(x.period_end)} <span class="small muted">(${x.months} mes)</span></td><td>${esc(x.note || '')}</td></tr>`).join('')}</tbody></table></div>`
+      ${p.map(x => `<tr><td>${fDT(x.paid_at)}</td><td class="num">${money(x.amount, x.currency)}</td><td>${fDay(x.period_end)} <span class="small muted">(${x.months} mes)</span></td><td>${esc(x.note || '')}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">Todavía no hay pagos registrados.</div>') + changes;
   });
 }
