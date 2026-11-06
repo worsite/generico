@@ -44,6 +44,7 @@ h1{font-size:22px} h2{font-size:17px} h3{font-size:15px}
 .btn.icon{width:40px;padding:0;justify-content:center}
 .btn.sm.icon{width:34px}
 .btn:disabled{opacity:.55;cursor:not-allowed}
+a.btn{text-decoration:none}
 
 /* formularios */
 label.f{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px}
@@ -209,6 +210,23 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .cempty{flex:1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
 .chat .back{display:none}
 .scrim{display:none}
+.quote-grid{display:grid;grid-template-columns:minmax(300px,430px) 1fr;gap:16px;align-items:start}
+.qsheet{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff;font-size:14px}
+.qsheet .qhead{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 14px;background:var(--primary);color:#fff}
+.qsheet .qmeta{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--muted);font-size:13px}
+.qtable{width:100%;border-collapse:collapse}
+.qtable th{background:transparent;text-align:left;font-weight:500;color:var(--fg);padding:9px 14px;border-top:1px solid var(--border);font-size:14px}
+.qtable td{padding:9px 14px;border-top:1px solid var(--border);text-align:right;font-family:var(--mono);font-weight:600}
+.qtable tr:first-child th,.qtable tr:first-child td{border-top:0}
+.qtable tr.strong th,.qtable tr.strong td{background:var(--primary-soft);color:var(--primary-dark)}
+.qtable tr.final th,.qtable tr.final td{background:var(--accent-soft);color:#047857;font-size:16px}
+#printArea{display:none}
+@media print{
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block!important;padding:18px;max-width:640px;margin:0 auto}
+  #printArea .qhead{background:#2563EB!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #printArea .qtable tr.strong th,#printArea .qtable tr.strong td,#printArea .qtable tr.final th,#printArea .qtable tr.final td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 .remind{display:flex;gap:10px;align-items:flex-start;background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13.5px;margin:4px 0 14px}
 .note-card{background:var(--warn-soft);border:1px solid #FCD34D;border-radius:10px;padding:12px 14px;margin-bottom:12px}
 .del-card{background:var(--danger-soft);border:1px solid #F5C2C2;border-radius:10px;padding:12px 14px;margin-bottom:12px}
@@ -243,6 +261,7 @@ input[type=color].swatch{min-height:0;padding:1px}
   .cal.week .day{min-height:0}
   .cal.week .chip{font-size:12.5px;height:auto;padding:3px 6px;border-left-width:3px}
   .row2{grid-template-columns:1fr}
+  .quote-grid{grid-template-columns:1fr}
   .seg{margin-left:0}
   .appt{grid-template-columns:56px 1fr}
   .appt>:last-child{grid-column:1/-1}
@@ -390,7 +409,7 @@ function confirmDlg(msg, okLabel = 'Confirmar', danger = true) {
    ===================================================================== */
 const S = {
   user:null, me:null, group:null, view:'resumen', sub:null,
-  appts:[], sales:[], refs:[], assigns:[], deliveries:[], notifs:[], team:[], members:[], msgs:[], reads:[],
+  appts:[], sales:[], refs:[], assigns:[], deliveries:[], notifs:[], team:[], members:[], msgs:[], reads:[], quotes:[],
   cal:{mode:'mes', date:new Date()},
   f:{seller:'', type:'', status:'', q:''},
   chat:{peer:null, q:'', rendered:null}, hist:{kind:null, seller:''}, rt:null, chatTimer:null,
@@ -418,7 +437,7 @@ const saleOf = apptId => S.sales.find(s => s.appointment_id === apptId);
 const unread = () => S.notifs.filter(n => !n.read).length;
 
 async function loadAll() {
-  const [appts, sales, refs, assigns, deliveries, notifs, team, members, msgs, reads] = await Promise.all([
+  const [appts, sales, refs, assigns, deliveries, notifs, team, members, msgs, reads, quotes] = await Promise.all([
     q(sb.from('appointments').select('*').order('event_date', {ascending:false})),
     q(sb.from('sales').select('*').order('created_at', {ascending:false})),
     q(sb.from('referrals').select('*').order('created_at', {ascending:false})),
@@ -428,9 +447,10 @@ async function loadAll() {
     q(sb.from('profiles').select('*').order('created_at', {ascending:true})),
     q(sb.rpc('group_members')),
     q(sb.from('messages').select('*').order('created_at', {ascending:false}).limit(1000)),
-    q(sb.from('chat_reads').select('*'))
+    q(sb.from('chat_reads').select('*')),
+    q(sb.from('quotes').select('*').order('created_at', {ascending:false}).limit(300))
   ]);
-  Object.assign(S, {appts, sales, refs, assigns, deliveries, notifs, team, members:members || [], msgs:(msgs || []).reverse(), reads:reads || []});
+  Object.assign(S, {appts, sales, refs, assigns, deliveries, notifs, team, members:members || [], msgs:(msgs || []).reverse(), reads:reads || [], quotes:quotes || []});
   const mine = team.find(t => t.id === S.user.id);
   if (mine) S.me = mine;
   S.sub = S.me?.role === 'admin' ? await q(sb.rpc('my_subscription')) : null;
@@ -1760,16 +1780,186 @@ function empDetail(id, tab) {
 ACT.empChat = d => { $$('.ov').forEach(o => o.close?.()); openChat(d.id); };
 
 /* =====================================================================
-   Cotizador (pendiente de activacion)
+   Cotizador
+   El emprendedor escribe el precio total (con IVA) y las cuotas; el sistema calcula el resto.
+   El servidor (schema.sql, quotes_calc) repite el mismo cálculo al guardar.
    ===================================================================== */
-const COTIZADOR_URL = '';   // cuando el cotizador esté listo, pega aquí su enlace y se activa para todos
+const QUOTE_PCT = {2:51.63, 3:34.79, 4:26.38, 5:21.33, 6:17.96, 7:15.56, 8:13.76, 9:12.36, 10:11.24, 11:10.33, 12:9.56, 13:8.92, 14:8.37,
+  15:7.89, 16:7.47, 17:7.11, 18:6.78, 19:6.49, 20:6.22, 21:5.99, 22:5.77, 23:5.58, 24:5.40, 25:5.18, 26:5.03, 27:5.00};
+const QUOTE_RATE_EA = '28,32 %', QUOTE_RATE_MV = '2,10 % MV';   // informativas
+const fPct = n => Number(n).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' %';
+const pad4 = n => String(n || 0).padStart(4, '0');
+
+function calcQuote(i) {
+  const num = v => Math.max(0, Math.round(Number(v) || 0));
+  const total = num(i.total), ship = num(i.shipping), r = {errors:[], total, ship};
+  if (!total) return r;
+  r.purchase = Math.floor(total * 100 / 119);       // precio de compra sin IVA (se redondea hacia abajo, como en la planilla)
+  r.shipNet = Math.floor(ship * 100 / 119);         // envío sin IVA
+  r.grand = total + ship;                           // precio total
+  r.iva = r.grand - r.purchase - r.shipNet;         // IVA 19 %
+  r.min = Math.ceil(r.grand / 20);                  // depósito mínimo: 5 %
+  r.deposit = i.deposit === '' || i.deposit == null ? r.min : num(i.deposit);
+  if (r.deposit < r.min) r.errors.push(`El depósito mínimo es el 5 %: ${money(r.min)}.`);
+  if (r.deposit >= r.grand) r.errors.push('El depósito debe ser menor al precio total para poder financiar.');
+  r.split = !!i.split;
+  r.today = r.split ? num(i.today) : r.deposit;
+  if (r.split) {
+    if (r.today < 1) r.errors.push('Escribe cuánto paga hoy.');
+    else if (r.today >= r.deposit) r.errors.push('Para dividir el depósito, lo que paga hoy debe ser menor al depósito.');
+  }
+  r.extra = r.split && r.today >= 1 && r.today < r.deposit ? r.deposit - r.today : 0;
+  r.days = r.extra ? (Number(i.days) === 60 ? 60 : 30) : 0;
+  r.balance = r.grand - r.deposit;
+  r.cuotas = Number(i.cuotas) || 0; r.pct = QUOTE_PCT[r.cuotas];
+  if (r.pct && r.balance > 0) r.monthly = Math.round(r.balance * Math.round(r.pct * 100) / 10000);
+  r.ok = !r.errors.length && r.monthly != null;
+  return r;
+}
+// una cotización guardada -> mismo formato que calcQuote (usa los valores guardados)
+const quoteFromRow = x => ({errors:[], total:Number(x.total), ship:Number(x.shipping), purchase:Number(x.purchase_price), shipNet:Number(x.shipping_net), grand:Number(x.grand_total),
+  iva:Number(x.iva), deposit:Number(x.deposit_total), today:Number(x.deposit_today), extra:Number(x.deposit_extra), days:x.deposit_extra_days || 0, balance:Number(x.balance),
+  cuotas:x.installments, pct:Number(x.monthly_pct), monthly:Number(x.monthly_payment), ok:true});
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+
+function quoteSheet(c, meta) {
+  const row = (k, v, cls = '') => `<tr class="${cls}"><th>${k}</th><td>${v}</td></tr>`;
+  const when = meta.date ? new Date(meta.date) : new Date();
+  return `<div class="qsheet"><div class="qhead"><b>COTIZACIÓN${meta.number ? ' COT-' + pad4(meta.number) : ''}</b><span>${fDate(when)}</span></div>
+    <div class="qmeta">${meta.client ? `Cliente: <b>${esc(meta.client)}</b>` : 'Cliente: —'}${meta.phone ? ` · Tel. ${esc(meta.phone)}` : ''} · Asesor: ${esc(meta.seller || person(S.me.id))}</div>
+    <table class="qtable"><tbody>
+      ${row('Precio de compra (sin IVA)', money(c.purchase))}
+      ${row('Costo de envío (sin IVA)', c.ship ? money(c.shipNet) : '—')}
+      ${row('IVA (19 %)', money(c.iva))}
+      ${row('Precio total', money(c.grand), 'strong')}
+      ${row('Depósito pagado hoy', c.today != null ? money(c.today) : '—')}
+      ${row('Fecha de pago del depósito adicional', c.extra ? `${fDate(addDays(when, c.days))} <span class="small muted">(a ${c.days} días)</span>` : '—')}
+      ${row('Depósito adicional', c.extra ? money(c.extra) : '—')}
+      ${row('Saldo a financiar', money(c.balance), 'strong')}
+      ${row('Tasa de interés fija remuneratoria efectiva anual', QUOTE_RATE_EA)}
+      ${row('Tasa de interés vigente a la fecha de hoy', QUOTE_RATE_MV)}
+      ${row('Número de cuotas mensuales', c.cuotas || '—')}
+      ${row('Pago mínimo mensual', c.monthly != null ? money(c.monthly) : '—', 'final')}
+    </tbody></table>${c.pct ? `<div class="qmeta" style="border-top:1px solid var(--border);border-bottom:0">Cuota = ${fPct(c.pct)} del saldo a financiar.</div>` : ''}</div>`;
+}
+function quoteText(c, meta) {
+  const when = meta.date ? new Date(meta.date) : new Date(), L = [];
+  L.push(`*Cotización${meta.number ? ' COT-' + pad4(meta.number) : ''}*${meta.client ? ' — ' + meta.client : ''}`, `Fecha: ${fDate(when)}`, '');
+  L.push(`Precio de compra (sin IVA): ${money(c.purchase)}`);
+  if (c.ship) L.push(`Costo de envío (sin IVA): ${money(c.shipNet)}`);
+  L.push(`IVA (19 %): ${money(c.iva)}`, `*Precio total: ${money(c.grand)}*`, '', `Depósito pagado hoy: ${money(c.today)}`);
+  if (c.extra) L.push(`Depósito adicional: ${money(c.extra)}`, `Fecha de pago del depósito adicional: ${fDate(addDays(when, c.days))} (a ${c.days} días)`);
+  L.push(`Saldo a financiar: ${money(c.balance)}`, `Tasa de interés efectiva anual: ${QUOTE_RATE_EA}`, `Tasa de interés vigente: ${QUOTE_RATE_MV}`,
+    `Número de cuotas mensuales: ${c.cuotas}`, `*Pago mínimo mensual: ${money(c.monthly)}*`, '', `Asesor: ${meta.seller || person(S.me.id)}`);
+  return L.join('\n');
+}
+function quoteWaLink(c, meta) {
+  let ph = String(meta.phone || '').replace(/\D/g, '');
+  if (ph.length === 10 && ph.startsWith('3')) ph = '57' + ph;      // celular colombiano sin indicativo
+  if (ph.length < 11) ph = '';
+  return `https://wa.me/${ph}?text=${encodeURIComponent(quoteText(c, meta))}`;
+}
+function printQuote(html) {
+  let area = $('#printArea'); if (area) area.remove();
+  area = document.createElement('div'); area.id = 'printArea'; area.innerHTML = html; document.body.append(area);
+  const done = () => { area.remove(); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done); window.print();
+}
+
+/* ---- pantalla ---- */
+const Q = {tab:'nueva', depTouched:false, saved:null, i:{total:'', shipping:'', deposit:'', split:false, today:'', days:30, cuotas:'', client:'', phone:'', notes:''}};
+const quoteMeta = () => ({client:Q.i.client.trim(), phone:Q.i.phone.trim(), seller:person(S.me.id), date:new Date(), number:Q.saved?.number});
 VIEWS.cotizador = el => {
-  el.innerHTML = `<div class="card" style="max-width:560px;margin:24px auto;text-align:center;padding:34px 24px">
-    <div class="av lg" style="margin:0 auto 14px;background:var(--primary-soft);color:var(--primary-dark)">${ic('calc')}</div>
-    <h2 style="margin-bottom:6px">Cotizador</h2>
-    <p class="muted" style="margin:0 0 18px">Aquí podrás crear cotizaciones para tus clientes.</p>
-    ${COTIZADOR_URL ? `<a class="btn primary" href="${esc(COTIZADOR_URL)}" target="_blank" rel="noopener noreferrer">${ic('calc')} Abrir cotizador</a>`
-      : `<a class="btn" href="#" aria-disabled="true" tabindex="-1" role="link" onclick="return false">${ic('clock')} Pendiente de activación</a>`}</div>`;
+  const tabs = `<div class="seg" style="margin:0 0 16px" role="group" aria-label="Cotizador"><button data-act="qTab" data-t="nueva" class="${Q.tab === 'nueva' ? 'on' : ''}">Nueva cotización</button>
+    <button data-act="qTab" data-t="hist" class="${Q.tab === 'hist' ? 'on' : ''}">${isAdmin() ? 'Todas las cotizaciones' : 'Mis cotizaciones'} (${S.quotes.length})</button></div>`;
+  if (Q.tab === 'hist') return quoteHistory(el, tabs);
+  const i = Q.i;
+  el.innerHTML = `${tabs}<div class="quote-grid"><div class="card"><h2>Datos de la cotización</h2><form id="fQ" autocomplete="off">
+      <div class="row2"><label class="f"><span>Nombre del cliente</span><input name="client" value="${esc(i.client)}" maxlength="80"></label>
+      <label class="f"><span>Teléfono / WhatsApp</span><input name="phone" type="tel" value="${esc(i.phone)}" maxlength="25"></label></div>
+      <label class="f"><span>Precio total (con IVA incluido) *</span><input name="total" type="number" min="0" step="1" inputmode="numeric" value="${esc(i.total)}" placeholder="Ej: 6000000"></label>
+      <label class="f"><span>Costo de envío (opcional, con IVA incluido)</span><input name="shipping" type="number" min="0" step="1" inputmode="numeric" value="${esc(i.shipping)}" placeholder="Solo si es a domicilio"></label>
+      <label class="f"><span>Número de cuotas *</span><select name="cuotas"><option value="">Elige las cuotas</option>${Object.keys(QUOTE_PCT).map(n => `<option value="${n}" ${String(i.cuotas) === n ? 'selected' : ''}>${n} cuotas</option>`).join('')}</select></label>
+      <label class="f"><span>Depósito acordado</span><input name="deposit" type="number" min="0" step="1" inputmode="numeric" value="${esc(i.deposit)}"></label>
+      <p class="hint" id="qDepHint"></p>
+      <label style="display:flex;gap:8px;align-items:center;margin:0 0 10px;font-weight:500"><input type="checkbox" name="split" style="width:auto;min-height:0" ${i.split ? 'checked' : ''}> El cliente dividirá el depósito (pago diferido)</label>
+      <div id="qSplit" ${i.split ? '' : 'hidden'}><div class="row2"><label class="f"><span>Paga hoy</span><input name="today" type="number" min="0" step="1" inputmode="numeric" value="${esc(i.today)}"></label>
+        <div class="f"><span>El resto lo paga a</span><div style="display:flex;gap:14px;padding-top:9px"><label style="display:flex;gap:6px;align-items:center"><input type="radio" name="days" value="30" style="width:auto;min-height:0" ${Number(i.days) === 30 ? 'checked' : ''}> 30 días</label>
+        <label style="display:flex;gap:6px;align-items:center"><input type="radio" name="days" value="60" style="width:auto;min-height:0" ${Number(i.days) === 60 ? 'checked' : ''}> 60 días</label></div></div></div>
+        <p class="hint" id="qSplitHint"></p></div>
+      <div class="actions"><button type="button" class="btn sm" data-act="qReset">Nueva cotización</button></div></form></div>
+    <div><div id="qOut"></div><div class="actions" id="qAct" style="margin-top:12px"></div></div></div>`;
+  const form = $('#fQ');
+  form.onsubmit = e => e.preventDefault();
+  form.oninput = e => {   // 'input' cubre teclear y también listas, casillas y opciones; 'change' (al salir del campo) redibujaría los botones y se perdería el primer clic
+    const f = new FormData(form), n = e.target.name;
+    Object.assign(i, {client:f.get('client'), phone:f.get('phone'), total:f.get('total'), shipping:f.get('shipping'), cuotas:f.get('cuotas'), deposit:f.get('deposit'),
+      split:form.split.checked, today:f.get('today'), days:Number(f.get('days')) || 30});
+    if (n === 'deposit') Q.depTouched = true;
+    if (!Q.depTouched) { const c = calcQuote({...i, deposit:''}); i.deposit = c.min ? String(c.min) : ''; form.deposit.value = i.deposit; }
+    if (n === 'split') { $('#qSplit').hidden = !i.split; if (i.split && !i.today) { const c = calcQuote(i); if (c.deposit) { i.today = String(Math.ceil(c.deposit / 2)); form.today.value = i.today; } } }
+    Q.saved = null; quoteOut();
+  };
+  quoteOut();
+};
+function quoteOut() {
+  const c = calcQuote(Q.i), out = $('#qOut'), act = $('#qAct'); if (!out) return;
+  $('#qDepHint').textContent = c.min ? `Mínimo 5 % del precio total: ${money(c.min)}. Puedes cambiarlo si el cliente da más.` : 'El mínimo es el 5 % del precio total.';
+  $('#qSplitHint').textContent = c.split && c.today >= 1 && c.today < c.deposit ? `Paga hoy ${money(c.today)} y ${money(c.deposit - c.today)} el ${fDate(addDays(new Date(), Number(Q.i.days) === 60 ? 60 : 30))}.` : '';
+  if (!c.total) { out.innerHTML = '<div class="card empty">Escribe el precio total y elige las cuotas para ver la cotización.</div>'; act.innerHTML = ''; act.dataset.h = ''; return; }
+  out.innerHTML = `${quoteSheet(c, quoteMeta())}${c.errors.length ? `<div class="err" style="margin-top:12px">${c.errors.map(esc).join('<br>')}</div>` : ''}
+    ${!c.errors.length && !c.cuotas ? '<div class="hint" style="margin-top:10px">Elige el número de cuotas para ver el pago mínimo mensual.</div>' : ''}`;
+  const actHtml = c.ok ? `${Q.saved ? `<span class="pill green">${ic('check')} Guardada COT-${pad4(Q.saved.number)}</span>` : `<button class="btn primary" data-act="qSave">${ic('check')} Guardar cotización</button>`}
+    <button class="btn" data-act="qPrint">${ic('copy')} Imprimir / PDF</button>
+    <a class="btn green" href="${quoteWaLink(c, quoteMeta())}" target="_blank" rel="noopener noreferrer">${ic('send')} Enviar por WhatsApp</a>
+    <button class="btn" data-act="qCopy">${ic('copy')} Copiar texto</button>` : '';
+  if (act.dataset.h !== actHtml) { act.dataset.h = actHtml; act.innerHTML = actHtml; }
+}
+ACT.qTab = d => { Q.tab = d.t; render(); };
+ACT.qReset = () => { Object.assign(Q, {depTouched:false, saved:null, i:{total:'', shipping:'', deposit:'', split:false, today:'', days:30, cuotas:'', client:'', phone:'', notes:''}}); render(); };
+ACT.qPrint = () => { const c = calcQuote(Q.i); if (c.ok) printQuote(quoteSheet(c, quoteMeta())); };
+ACT.qCopy = () => { const c = calcQuote(Q.i); if (c.ok) navigator.clipboard?.writeText(quoteText(c, quoteMeta())).then(() => toast('Cotización copiada'), () => toast('No se pudo copiar', true)); };
+ACT.qSave = (d, b) => run(async () => {
+  const i = Q.i, c = calcQuote(i);
+  if (!c.ok) throw new Error(c.errors[0] || 'Completa los datos de la cotización.');
+  const row = await q(sb.from('quotes').insert({group_id:S.me.group_id, client_name:i.client.trim() || null, client_phone:i.phone.trim() || null, total:c.total, shipping:c.ship,
+    deposit_total:c.deposit, deposit_today:c.today, deposit_extra_days:c.days || null, installments:c.cuotas}).select().single());
+  if (row.monthly_payment != null && Number(row.monthly_payment) !== c.monthly) console.warn('El cálculo del servidor difiere del de la pantalla', row, c);
+  S.quotes.unshift(row); Q.saved = row; toast(`Cotización COT-${pad4(row.number)} guardada`); quoteOut(); updateQuoteTab();
+}, b);
+const updateQuoteTab = () => { const t = $('[data-act="qTab"][data-t="hist"]'); if (t) t.textContent = `${isAdmin() ? 'Todas las cotizaciones' : 'Mis cotizaciones'} (${S.quotes.length})`; };
+
+/* ---- historial ---- */
+function quoteHistory(el, tabs) {
+  const list = S.quotes;
+  el.innerHTML = `${tabs}${list.length ? `<div class="tw"><table><thead><tr><th>Nº</th><th>Fecha</th><th>Cliente</th>${isAdmin() ? '<th>Emprendedor</th>' : ''}<th class="num">Precio total</th><th class="num">Cuotas</th><th class="num">Pago mensual</th></tr></thead><tbody>
+    ${list.map(x => `<tr class="click" data-act="qOpen" data-id="${x.id}"><td><b>COT-${pad4(x.number)}</b></td><td>${fDate(x.created_at)}</td><td>${esc(x.client_name || '—')}</td>${isAdmin() ? `<td>${esc(person(x.seller_id))}</td>` : ''}
+    <td class="num">${money(x.grand_total)}</td><td class="num">${x.installments}</td><td class="num">${money(x.monthly_payment)}</td></tr>`).join('')}</tbody></table></div>`
+    : '<div class="card empty">Todavía no has guardado cotizaciones. Crea una y pulsa "Guardar cotización".</div>'}`;
+}
+const quoteMetaOf = x => ({client:x.client_name, phone:x.client_phone, seller:person(x.seller_id), date:x.created_at, number:x.number});
+ACT.qOpen = d => {
+  const x = S.quotes.find(r => r.id === d.id); if (!x) return;
+  const c = quoteFromRow(x), meta = quoteMetaOf(x);
+  const m = modal(`Cotización COT-${pad4(x.number)}`, `${quoteSheet(c, meta)}
+    <div class="actions" style="margin-top:14px"><button class="btn" data-act="qPrintRow" data-id="${x.id}">${ic('copy')} Imprimir / PDF</button>
+      <a class="btn green" href="${quoteWaLink(c, meta)}" target="_blank" rel="noopener noreferrer">${ic('send')} Enviar por WhatsApp</a>
+      <button class="btn" data-act="qCopyRow" data-id="${x.id}">${ic('copy')} Copiar texto</button>
+      ${x.seller_id === S.me.id ? `<button class="btn" data-act="qBase" data-id="${x.id}">${ic('edit')} Usar como base</button>` : ''}
+      <button class="btn danger" data-act="qDel" data-id="${x.id}" aria-label="Eliminar cotización">${ic('trash')}</button></div>`, {wide:true});
+  return m;
+};
+ACT.qPrintRow = d => { const x = S.quotes.find(r => r.id === d.id); if (x) printQuote(quoteSheet(quoteFromRow(x), quoteMetaOf(x))); };
+ACT.qCopyRow = d => { const x = S.quotes.find(r => r.id === d.id); if (x) navigator.clipboard?.writeText(quoteText(quoteFromRow(x), quoteMetaOf(x))).then(() => toast('Cotización copiada'), () => toast('No se pudo copiar', true)); };
+ACT.qBase = d => {
+  const x = S.quotes.find(r => r.id === d.id); if (!x) return;
+  Object.assign(Q, {tab:'nueva', saved:null, depTouched:true, i:{total:String(x.total), shipping:Number(x.shipping) ? String(x.shipping) : '', deposit:String(x.deposit_total), split:Number(x.deposit_extra) > 0,
+    today:String(x.deposit_today), days:x.deposit_extra_days || 30, cuotas:String(x.installments), client:x.client_name || '', phone:x.client_phone || '', notes:''}});
+  $$('.ov').forEach(o => o.close?.()); render();
+};
+ACT.qDel = async d => {
+  if (!await confirmDlg('¿Eliminar esta cotización guardada?', 'Eliminar')) return;
+  run(async () => { await q(sb.from('quotes').delete().eq('id', d.id)); S.quotes = S.quotes.filter(r => r.id !== d.id); $$('.ov').forEach(o => o.close?.()); toast('Cotización eliminada'); render(); });
 };
 </script>
 </body>

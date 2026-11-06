@@ -260,6 +260,34 @@ create table if not exists public.admin_changes (
 );
 create index if not exists admin_changes_group_idx on public.admin_changes(group_id, changed_at desc);
 
+-- Cotizaciones guardadas. Los valores calculados los fija el servidor (ver quotes_calc)
+create table if not exists public.quotes (
+  id                 uuid primary key default gen_random_uuid(),
+  group_id           uuid not null references public.groups(id) on delete cascade,
+  seller_id          uuid references public.profiles(id) on delete set null,
+  number             integer,
+  client_name        text,
+  client_phone       text,
+  notes              text,
+  total              numeric(14,0) not null,        -- precio total del producto, IVA incluido
+  shipping           numeric(14,0) not null default 0,  -- costo de envio, IVA incluido
+  purchase_price     numeric(14,0),                 -- precio de compra sin IVA
+  shipping_net       numeric(14,0),                 -- envio sin IVA
+  iva                numeric(14,0),
+  grand_total        numeric(14,0),                 -- precio total = producto + envio
+  deposit_total      numeric(14,0) not null,        -- deposito acordado (minimo 5 %)
+  deposit_today      numeric(14,0),                 -- parte que paga hoy
+  deposit_extra      numeric(14,0),                 -- parte que paga despues (30 o 60 dias)
+  deposit_extra_days integer,
+  balance            numeric(14,0),                 -- saldo a financiar
+  installments       integer not null,
+  monthly_pct        numeric(6,2),
+  monthly_payment    numeric(14,0),
+  created_at         timestamptz not null default now()
+);
+create index if not exists quotes_group_idx on public.quotes(group_id, created_at desc);
+create index if not exists quotes_seller_idx on public.quotes(seller_id, created_at desc);
+
 -- ---------- Funciones auxiliares (SECURITY DEFINER evita recursion de RLS)
 
 create or replace function public.bogota_today() returns date
@@ -478,6 +506,56 @@ drop trigger if exists sales_set_commission on public.sales;
 create trigger sales_set_commission before insert or update on public.sales
   for each row execute function public.sales_set_commission();
 
+-- Cotizador: porcentaje del saldo a financiar segun el numero de cuotas (2 a 27)
+create or replace function public.quote_pct(p_n integer) returns numeric
+language sql immutable as $$
+  select (array[51.63, 34.79, 26.38, 21.33, 17.96, 15.56, 13.76, 12.36, 11.24, 10.33, 9.56, 8.92, 8.37,
+                7.89, 7.47, 7.11, 6.78, 6.49, 6.22, 5.99, 5.77, 5.58, 5.40, 5.18, 5.03, 5.00])[p_n - 1]
+  where p_n between 2 and 27
+$$;
+
+-- Cotizador: el servidor calcula y valida todo (IVA 19 %, deposito minimo 5 %, cuota mensual)
+create or replace function public.quotes_calc() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_min numeric;
+begin
+  new.seller_id := auth.uid();
+  new.number := coalesce((select max(number) from public.quotes where group_id = new.group_id), 0) + 1;
+  new.total := round(coalesce(new.total, 0));
+  new.shipping := round(coalesce(new.shipping, 0));
+  if new.total <= 0 then raise exception 'Escribe el precio total'; end if;
+  new.purchase_price := floor(new.total * 100 / 119);      -- sin IVA, redondeado hacia abajo como en la planilla
+  new.shipping_net := floor(new.shipping * 100 / 119);
+  new.grand_total := new.total + new.shipping;
+  new.iva := new.grand_total - new.purchase_price - new.shipping_net;
+  v_min := ceil(new.grand_total / 20);
+  new.deposit_total := round(coalesce(new.deposit_total, v_min));
+  if new.deposit_total < v_min then
+    raise exception 'El deposito minimo es el 5 por ciento: %', v_min;
+  end if;
+  if new.deposit_total >= new.grand_total then
+    raise exception 'El deposito debe ser menor al precio total';
+  end if;
+  new.deposit_today := round(coalesce(new.deposit_today, new.deposit_total));
+  if new.deposit_today < 1 or new.deposit_today > new.deposit_total then
+    raise exception 'Lo que paga hoy no es valido';
+  end if;
+  new.deposit_extra := new.deposit_total - new.deposit_today;
+  if new.deposit_extra > 0 then
+    if new.deposit_extra_days not in (30, 60) then raise exception 'El deposito adicional es a 30 o 60 dias'; end if;
+  else
+    new.deposit_extra_days := null;
+  end if;
+  new.balance := new.grand_total - new.deposit_total;
+  new.monthly_pct := public.quote_pct(new.installments);
+  if new.monthly_pct is null then raise exception 'El numero de cuotas debe estar entre 2 y 27'; end if;
+  new.monthly_payment := round(new.balance * new.monthly_pct / 100);
+  return new;
+end $$;
+drop trigger if exists quotes_calc on public.quotes;
+create trigger quotes_calc before insert on public.quotes
+  for each row execute function public.quotes_calc();
+
 -- Citas asignadas por otra persona -> notificacion al vendedor
 create or replace function public.appointments_notify() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -687,6 +765,7 @@ alter table public.platform_settings enable row level security;
 alter table public.subscriptions    enable row level security;
 alter table public.payments         enable row level security;
 alter table public.admin_changes    enable row level security;
+alter table public.quotes           enable row level security;
 
 -- groups
 drop policy if exists groups_select on public.groups;
@@ -812,6 +891,17 @@ create policy reads_insert on public.chat_reads for insert to authenticated
 drop policy if exists reads_update on public.chat_reads;
 create policy reads_update on public.chat_reads for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- quotes: cada quien ve las suyas; el administrador ve todas las del grupo
+drop policy if exists quotes_select on public.quotes;
+create policy quotes_select on public.quotes for select to authenticated
+  using (group_id = public.my_group() and (public.is_admin() or seller_id = auth.uid()));
+drop policy if exists quotes_insert on public.quotes;
+create policy quotes_insert on public.quotes for insert to authenticated
+  with check (group_id = public.my_group());
+drop policy if exists quotes_delete on public.quotes;
+create policy quotes_delete on public.quotes for delete to authenticated
+  using (group_id = public.my_group() and (public.is_admin() or seller_id = auth.uid()));
 
 -- platform_owner: cada quien solo puede ver si es el dueño
 drop policy if exists owner_select on public.platform_owner;
