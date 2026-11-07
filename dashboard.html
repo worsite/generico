@@ -218,6 +218,7 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 .cempty{flex:1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
 .chat .back{display:none}
 .scrim{display:none}
+.ann-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0;font-size:15px;line-height:1.55}
 .fbar{display:flex;gap:10px;margin-bottom:10px}
 .fbar input{flex:1;min-width:0}
 .fbar .fbtn{flex:none}
@@ -495,6 +496,7 @@ const ICONS = {
   calc:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
   clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   crown:'<path d="m2 8 4 4 6-8 6 8 4-4-2 11H4z"/>',
+  megaphone:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
   dots:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'
 };
@@ -559,7 +561,7 @@ const S = {
   cal:{mode:'mes', date:new Date()},
   f:{seller:'', type:'', status:'', q:''},
   chat:{peer:null, q:'', rendered:null}, hist:{kind:null, seller:''}, rt:null, chatTimer:null,
-  recovery:IS_RECOVERY, authMsg:LINK_ERROR,
+  recovery:IS_RECOVERY, authMsg:LINK_ERROR, annSeen:new Set(), pollN:0,
   period:'mes', sellerFilterSales:'', booted:null, poll:null
 };
 const isAdmin = () => S.me?.role === 'admin';
@@ -789,9 +791,10 @@ async function boot(force) {
     S.group = S.group || await q(sb.from('groups').select('*').eq('id', me.group_id).maybeSingle());
     S.view = 'resumen';
     renderShell(); render(); startPoll(); subscribeRealtime();
+    setTimeout(() => run(checkAnnouncements), 700);
   } catch (e) { console.error(e); toast(e.message, true); renderAuth(); }
 }
-function startPoll() { stopPoll(); S.poll = setInterval(() => { run(loadNotifs); run(refreshMsgs); }, 20000); }
+function startPoll() { stopPoll(); S.poll = setInterval(() => { run(loadNotifs); run(refreshMsgs); if (++S.pollN % 15 === 0) run(checkAnnouncements); }, 20000); }
 function stopPoll() {
   clearInterval(S.poll); S.poll = null; clearInterval(S.chatTimer); S.chatTimer = null;
   try { if (S.rt) sb.removeChannel(S.rt); } catch (e) { /* sin tiempo real */ }
@@ -2206,6 +2209,28 @@ function cardify() {
 }
 new MutationObserver(() => requestAnimationFrame(cardify)).observe(document.body, {childList:true, subtree:true});
 cardify();
+
+/* =====================================================================
+   Avisos del dueño de la plataforma (novedades y actualizaciones)
+   ===================================================================== */
+async function checkAnnouncements() {
+  if (!S.me || S.me.status !== 'activo' || $('.ov')) return;
+  const list = (await q(sb.rpc('pending_announcements'))) || [];
+  const fresh = list.filter(a => !S.annSeen.has(a.id));
+  if (fresh.length && !$('.ov')) showAnnouncement(fresh[0], fresh.length);
+}
+function showAnnouncement(a, left) {
+  S.annSeen.add(a.id);   // si solo lo cierra, no se repite en esta sesión; sin confirmar, vuelve a salir al próximo ingreso
+  const m = modal(a.title, `<div><span class="pill blue">${ic('megaphone')} Aviso${left > 1 ? ` · ${left} pendientes` : ''}</span>
+    <div class="ann-body">${esc(a.body)}</div><div class="small muted">Publicado el ${fDate(a.starts_at)}</div>
+    <div class="mf" style="margin-top:14px"><button type="button" class="btn" data-close>Cerrar</button><button type="button" class="btn primary" data-ann-ok>${ic('check')} Entendido</button></div></div>`);
+  m.addEventListener('click', e => {
+    const ok = e.target.closest('[data-ann-ok]'); if (!ok) return;
+    run(async () => { await q(sb.rpc('ack_announcement', {p_id:a.id})); toast('Gracias por confirmar'); m.close(); }, ok);
+  });
+  // al cerrarse la ventana (de cualquier forma) se muestra el siguiente aviso, si lo hay
+  new MutationObserver((_, ob) => { if (!document.body.contains(m)) { ob.disconnect(); setTimeout(() => run(checkAnnouncements), 400); } }).observe(document.body, {childList:true});
+}
 </script>
 </body>
 </html>

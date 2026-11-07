@@ -288,6 +288,24 @@ create table if not exists public.quotes (
 create index if not exists quotes_group_idx on public.quotes(group_id, created_at desc);
 create index if not exists quotes_seller_idx on public.quotes(seller_id, created_at desc);
 
+-- Avisos del dueño de la plataforma para todos los usuarios (se publican desde control.html)
+create table if not exists public.announcements (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null check (char_length(title) between 1 and 120),
+  body       text not null check (char_length(body) between 1 and 2000),
+  starts_at  timestamptz not null default now(),
+  ends_at    timestamptz not null,
+  paused     boolean not null default false,
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+create table if not exists public.announcement_reads (
+  announcement_id uuid not null references public.announcements(id) on delete cascade,
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  read_at         timestamptz not null default now(),
+  primary key (announcement_id, user_id)
+);
+
 -- ---------- Funciones auxiliares (SECURITY DEFINER evita recursion de RLS)
 
 create or replace function public.bogota_today() returns date
@@ -766,6 +784,8 @@ alter table public.subscriptions    enable row level security;
 alter table public.payments         enable row level security;
 alter table public.admin_changes    enable row level security;
 alter table public.quotes           enable row level security;
+alter table public.announcements    enable row level security;
+alter table public.announcement_reads enable row level security;
 
 -- groups
 drop policy if exists groups_select on public.groups;
@@ -1139,6 +1159,85 @@ begin
     where group_id = p_group;
 end $$;
 grant execute on function public.owner_set_price(uuid, numeric, text) to authenticated;
+
+-- ---------- Avisos ---------------------------------------------------------
+
+-- Avisos vigentes que la persona todavia no ha confirmado
+create or replace function public.pending_announcements()
+returns table(id uuid, title text, body text, starts_at timestamptz, ends_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select a.id, a.title, a.body, a.starts_at, a.ends_at
+  from public.announcements a
+  where not a.paused and now() >= a.starts_at and now() < a.ends_at
+    and exists (select 1 from public.profiles p where p.id = auth.uid() and p.status = 'activo')
+    and not exists (select 1 from public.announcement_reads r where r.announcement_id = a.id and r.user_id = auth.uid())
+  order by a.starts_at asc
+$$;
+grant execute on function public.pending_announcements() to authenticated;
+
+-- La persona confirma que leyo el aviso (no vuelve a aparecer)
+create or replace function public.ack_announcement(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and status = 'activo') then
+    raise exception 'Sin permiso';
+  end if;
+  insert into public.announcement_reads(announcement_id, user_id)
+    select a.id, auth.uid() from public.announcements a where a.id = p_id
+    on conflict do nothing;
+end $$;
+grant execute on function public.ack_announcement(uuid) to authenticated;
+
+-- Panel del dueño: lista de avisos con cuantas personas los han confirmado
+create or replace function public.owner_announcements()
+returns table(id uuid, title text, body text, starts_at timestamptz, ends_at timestamptz, paused boolean,
+              created_at timestamptz, reads bigint, audience bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_owner() then raise exception 'Sin permiso'; end if;
+  return query
+  select a.id, a.title, a.body, a.starts_at, a.ends_at, a.paused, a.created_at,
+         (select count(*) from public.announcement_reads r where r.announcement_id = a.id),
+         (select count(*) from public.profiles p where p.status = 'activo')
+  from public.announcements a order by a.created_at desc;
+end $$;
+grant execute on function public.owner_announcements() to authenticated;
+
+-- Crear (p_id nulo) o editar un aviso
+create or replace function public.owner_save_announcement(p_id uuid, p_title text, p_body text, p_starts timestamptz, p_ends timestamptz)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  if not public.is_owner() then raise exception 'Sin permiso'; end if;
+  if coalesce(trim(p_title), '') = '' or coalesce(trim(p_body), '') = '' then raise exception 'Escribe el titulo y el mensaje'; end if;
+  if p_ends is null or p_starts is null or p_ends <= p_starts then raise exception 'La fecha final debe ser posterior a la inicial'; end if;
+  if p_id is null then
+    insert into public.announcements(title, body, starts_at, ends_at)
+      values (trim(p_title), trim(p_body), p_starts, p_ends) returning id into v_id;
+  else
+    update public.announcements set title = trim(p_title), body = trim(p_body), starts_at = p_starts, ends_at = p_ends
+      where id = p_id returning id into v_id;
+    if v_id is null then raise exception 'Aviso no encontrado'; end if;
+  end if;
+  return v_id;
+end $$;
+grant execute on function public.owner_save_announcement(uuid, text, text, timestamptz, timestamptz) to authenticated;
+
+create or replace function public.owner_set_announcement_paused(p_id uuid, p_paused boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_owner() then raise exception 'Sin permiso'; end if;
+  update public.announcements set paused = p_paused where id = p_id;
+end $$;
+grant execute on function public.owner_set_announcement_paused(uuid, boolean) to authenticated;
+
+create or replace function public.owner_delete_announcement(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_owner() then raise exception 'Sin permiso'; end if;
+  delete from public.announcements where id = p_id;
+end $$;
+grant execute on function public.owner_delete_announcement(uuid) to authenticated;
 
 -- ---------- Datos para instalaciones anteriores ----------------------------
 
